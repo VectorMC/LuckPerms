@@ -25,10 +25,14 @@
 
 package me.lucko.luckperms.bukkit.inject.dummy;
 
+import com.avaje.ebean.EbeanServer;
+import com.google.inject.Injector;
+import net.avicus.exception.ExceptionHandler;
 import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.event.EventRegistry;
 import org.bukkit.generator.ChunkGenerator;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginDescriptionFile;
@@ -75,4 +79,9 @@ public class DummyPlugin implements Plugin {
     @Override public boolean onCommand(CommandSender commandSender, Command command, String s, String[] strings) { return false; }
     @Override public List<String> onTabComplete(CommandSender commandSender, Command command, String s, String[] strings) { return null; }
 
+    // Magnet
+    @Override public EventRegistry eventRegistry() { return null; }
+    @Override public EbeanServer getDatabase() { return null; }
+    @Override public ExceptionHandler exceptionHandler() { return null; }
+    @Override public Injector injector() { return null; }
 }

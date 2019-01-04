@@ -33,6 +33,7 @@ import org.bukkit.permissions.PermissibleBase;
 import org.bukkit.permissions.PermissionAttachment;
 
 import java.lang.reflect.Field;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
@@ -99,7 +100,7 @@ public final class PermissibleInjector {
         // Move attachments over from the old permissible
 
         //noinspection unchecked
-        List<PermissionAttachment> attachments = (List<PermissionAttachment>) PERMISSIBLE_BASE_ATTACHMENTS_FIELD.get(oldPermissible);
+        LinkedHashSet<PermissionAttachment> attachments = (LinkedHashSet<PermissionAttachment>) PERMISSIBLE_BASE_ATTACHMENTS_FIELD.get(oldPermissible);
 
         newPermissible.convertAndAddAttachments(attachments);
         attachments.clear();

@@ -40,12 +40,12 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import me.lucko.commodore.Commodore;
 import me.lucko.commodore.CommodoreProvider;
 import me.lucko.luckperms.bukkit.LPBukkitPlugin;
-import me.lucko.luckperms.common.sender.Sender;
+// when magnet updates to 1.13 import me.lucko.luckperms.common.sender.Sender;
 
 import org.bukkit.command.Command;
-import org.bukkit.event.EventHandler;
+// when magnet updates to 1.13 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerCommandSendEvent;
+// when magnet updates to 1.13 import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.plugin.PluginManager;
 
 import java.io.BufferedReader;
@@ -86,7 +86,7 @@ public class LuckPermsBrigadier {
             this.plugin = plugin;
             this.pluginCommand = pluginCommand;
         }
-
+        /* Use when magnet updates to 1.13.2 | For sending the commands to autocomplete when tabbing
         @EventHandler
         public void onCommandSend(PlayerCommandSendEvent e) {
             Sender playerAsSender = this.plugin.getSenderFactory().wrap(e.getPlayer());
@@ -95,6 +95,7 @@ public class LuckPermsBrigadier {
                 e.getCommands().removeAll(this.pluginCommand.getAliases());
             }
         }
+        */
     }
 
     private static ArgumentBuilder deserialize(JsonObject data) {

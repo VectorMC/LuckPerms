@@ -7,12 +7,14 @@ repositories {
         name 'spigot-repo'
         url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
     }
+    mavenLocal()
 }
 
 dependencies {
     compile project(':common')
 
-    compileOnly 'org.spigotmc:spigot-api:1.13.2-R0.1-SNAPSHOT'
+    compileOnly 'net.avicus:magnet-api:1.8.8-R0.1-SNAPSHOT'
+    //compileOnly 'org.spigotmc:spigot-api:1.13.2-R0.1-SNAPSHOT'
     compileOnly'net.kyori:text-adapter-bukkit:1.0.1'
     compileOnly 'me.lucko:commodore:1.0'
     compileOnly('net.milkbowl.vault:VaultAPI:1.6') {
