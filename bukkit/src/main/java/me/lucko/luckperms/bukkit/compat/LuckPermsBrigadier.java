@@ -40,12 +40,12 @@ import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import me.lucko.commodore.Commodore;
 import me.lucko.commodore.CommodoreProvider;
 import me.lucko.luckperms.bukkit.LPBukkitPlugin;
-import me.lucko.luckperms.common.sender.Sender;
+//import me.lucko.luckperms.common.sender.Sender;
 
 import org.bukkit.command.Command;
-import org.bukkit.event.EventHandler;
+//import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+//import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 //import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.plugin.PluginManager;
 
