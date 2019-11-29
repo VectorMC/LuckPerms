@@ -25,6 +25,7 @@
 
 package me.lucko.luckperms.bukkit.inject.dummy;
 
+import com.avaje.ebean.EbeanServer;
 import org.bukkit.Server;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -74,5 +75,5 @@ public class DummyPlugin implements Plugin {
     @Override public String getName() { return null; }
     @Override public boolean onCommand(CommandSender commandSender, Command command, String s, String[] strings) { return false; }
     @Override public List<String> onTabComplete(CommandSender commandSender, Command command, String s, String[] strings) { return null; }
-
+    @Override public EbeanServer getDatabase() { return null; }
 }

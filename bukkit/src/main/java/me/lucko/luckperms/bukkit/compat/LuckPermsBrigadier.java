@@ -45,7 +45,8 @@ import me.lucko.luckperms.common.sender.Sender;
 import org.bukkit.command.Command;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerCommandSendEvent;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
+//import org.bukkit.event.player.PlayerCommandSendEvent;
 import org.bukkit.plugin.PluginManager;
 
 import java.io.BufferedReader;
@@ -87,6 +88,7 @@ public class LuckPermsBrigadier {
             this.pluginCommand = pluginCommand;
         }
 
+        /*
         @EventHandler
         public void onCommandSend(PlayerCommandSendEvent e) {
             Sender playerAsSender = this.plugin.getSenderFactory().wrap(e.getPlayer());
@@ -95,6 +97,7 @@ public class LuckPermsBrigadier {
                 e.getCommands().removeAll(this.pluginCommand.getAliases());
             }
         }
+         */
     }
 
     private static ArgumentBuilder deserialize(JsonObject data) {

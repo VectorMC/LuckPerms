@@ -7,12 +7,16 @@ repositories {
         name 'spigot-repo'
         url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
     }
+    maven {
+        name 'ashcon-repo'
+        url 'https://repo.ashcon.app/content/repositories/snapshots'
+    }
 }
 
 dependencies {
     compile project(':common')
 
-    compileOnly 'org.spigotmc:spigot-api:1.13.2-R0.1-SNAPSHOT'
+    compileOnly 'app.ashcon:sportpaper:1.8.8-R0.1-SNAPSHOT'
     compileOnly'net.kyori:text-adapter-bukkit:1.0.1'
     compileOnly 'me.lucko:commodore:1.0'
     compileOnly('net.milkbowl.vault:VaultAPI:1.6') {

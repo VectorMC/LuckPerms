@@ -27,6 +27,7 @@ package me.lucko.luckperms.bukkit.compat;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Server;
+import org.bukkit.command.CommandSender;
 import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.conversations.Conversation;
 import org.bukkit.conversations.ConversationAbandonedEvent;
@@ -35,6 +36,7 @@ import org.bukkit.permissions.PermissionAttachment;
 import org.bukkit.permissions.PermissionAttachmentInfo;
 import org.bukkit.plugin.Plugin;
 
+import java.util.Collection;
 import java.util.Optional;
 import java.util.Set;
 
@@ -61,6 +63,11 @@ public class NullSafeConsoleCommandSender implements ConsoleCommandSender {
     @Override
     public String getName() {
         return "CONSOLE";
+    }
+
+    @Override
+    public String getName(CommandSender commandSender) {
+        return this.getName();
     }
 
     @Override
@@ -106,7 +113,6 @@ public class NullSafeConsoleCommandSender implements ConsoleCommandSender {
     }
 
     // just throw UnsupportedOperationException - we never use any of these methods
-    @Override public Spigot spigot() { throw new UnsupportedOperationException(); }
     @Override public boolean isConversing() { throw new UnsupportedOperationException(); }
     @Override public void acceptConversationInput(String s) { throw new UnsupportedOperationException(); }
     @Override public boolean beginConversation(Conversation conversation) { throw new UnsupportedOperationException(); }
@@ -118,7 +124,22 @@ public class NullSafeConsoleCommandSender implements ConsoleCommandSender {
     @Override public PermissionAttachment addAttachment(Plugin plugin, String s, boolean b, int i) { throw new UnsupportedOperationException(); }
     @Override public PermissionAttachment addAttachment(Plugin plugin, int i) { throw new UnsupportedOperationException(); }
     @Override public void removeAttachment(PermissionAttachment permissionAttachment) { throw new UnsupportedOperationException(); }
+
+    @Override public boolean removeAttachments(Plugin plugin) { throw new UnsupportedOperationException(); }
+    @Override public boolean removeAttachments(String s) { throw new UnsupportedOperationException(); }
+    @Override public boolean removeAttachments(Permission permission) { throw new UnsupportedOperationException(); }
+    @Override public boolean removeAttachments(Plugin plugin, String s) { throw new UnsupportedOperationException(); }
+    @Override public boolean removeAttachments(Plugin plugin, Permission permission) { throw new UnsupportedOperationException(); }
+
     @Override public void recalculatePermissions() { throw new UnsupportedOperationException(); }
     @Override public Set<PermissionAttachmentInfo> getEffectivePermissions() { throw new UnsupportedOperationException(); }
+
+    @Override public PermissionAttachmentInfo getEffectivePermission(String s) { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments() { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments(Plugin plugin) { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments(String s) { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments(Permission permission) { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments(Plugin plugin, String s) { throw new UnsupportedOperationException(); }
+    @Override public Collection<PermissionAttachmentInfo> getAttachments(Plugin plugin, Permission permission) { throw new UnsupportedOperationException(); }
     @Override public void setOp(boolean b) { throw new UnsupportedOperationException(); }
 }
