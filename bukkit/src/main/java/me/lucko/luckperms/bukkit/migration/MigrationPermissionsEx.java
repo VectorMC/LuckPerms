@@ -27,7 +27,6 @@ package me.lucko.luckperms.bukkit.migration;
 
 import com.google.common.base.Strings;
 
-import me.lucko.luckperms.api.event.cause.CreationCause;
 import me.lucko.luckperms.common.command.CommandResult;
 import me.lucko.luckperms.common.command.abstraction.SubCommand;
 import me.lucko.luckperms.common.command.access.CommandPermission;
@@ -39,13 +38,20 @@ import me.lucko.luckperms.common.model.Group;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.model.Track;
 import me.lucko.luckperms.common.model.User;
-import me.lucko.luckperms.common.node.factory.NodeFactory;
-import me.lucko.luckperms.common.node.model.NodeTypes;
+import me.lucko.luckperms.common.model.manager.group.GroupManager;
+import me.lucko.luckperms.common.node.types.Inheritance;
+import me.lucko.luckperms.common.node.types.Meta;
+import me.lucko.luckperms.common.node.types.Prefix;
+import me.lucko.luckperms.common.node.types.Suffix;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.util.Iterators;
 import me.lucko.luckperms.common.util.Predicates;
 import me.lucko.luckperms.common.util.ProgressLogger;
+
+import net.luckperms.api.context.DefaultContextKeys;
+import net.luckperms.api.event.cause.CreationCause;
+import net.luckperms.api.model.data.DataType;
 
 import org.bukkit.Bukkit;
 
@@ -91,7 +97,6 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
         super(CommandSpec.MIGRATION_COMMAND.localize(locale), "permissionsex", CommandPermission.MIGRATION, Predicates.alwaysFalse());
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public CommandResult execute(LuckPermsPlugin plugin, Sender sender, Object o, List<String> args, String label) {
         ProgressLogger log = new ProgressLogger(Message.MIGRATION_LOG, Message.MIGRATION_LOG_PROGRESS, "PermissionsEx");
@@ -119,7 +124,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
         log.log("Starting group migration.");
         AtomicInteger groupCount = new AtomicInteger(0);
         Set<String> ladders = new HashSet<>();
-        Iterators.iterate(manager.getGroupList(), group -> {
+        Iterators.tryIterate(manager.getGroupList(), group -> {
             int groupWeight = maxWeight - group.getRank();
 
             final String groupName = MigrationUtils.standardizeName(group.getName());
@@ -163,7 +168,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
         // Increment the max weight from the group migrations. All user meta should override.
         int userWeight = maxWeight + 5;
 
-        Iterators.iterate(manager.getUsers(), user -> {
+        Iterators.tryIterate(manager.getUsers(), user -> {
             UUID u = BukkitUuids.lookupUuid(log, user.getIdentifier());
             if (u == null) {
                 return;
@@ -175,7 +180,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
             // migrate data
             migrateEntity(user, lpUser, userWeight);
 
-            plugin.getUserManager().cleanup(lpUser);
+            plugin.getUserManager().getHouseKeeper().cleanup(lpUser.getUniqueId());
             plugin.getStorage().saveUser(lpUser);
             log.logProgress("Migrated {} users so far.", userCount.incrementAndGet(), ProgressLogger.DEFAULT_NOTIFY_FREQUENCY);
         });
@@ -187,7 +192,6 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
 
     private static Map<String, List<String>> getPermanentPermissions(PermissionEntity entity) {
         try {
-            //noinspection unchecked
             PermissionsData data = (PermissionsData) GET_DATA_METHOD.invoke(entity);
             return data.getPermissionsMap();
         } catch (IllegalAccessException | InvocationTargetException e) {
@@ -201,7 +205,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
             String world = standardizeWorld(worldData.getKey());
             for (String node : worldData.getValue()) {
                 if (node.isEmpty()) continue;
-                holder.setPermission(MigrationUtils.parseNode(node, true).setWorld(world).build());
+                holder.setNode(DataType.NORMAL, MigrationUtils.parseNode(node, true).withContext(DefaultContextKeys.WORLD_KEY, world).build(), true);
             }
         }
 
@@ -223,7 +227,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
             for (String node : worldData.getValue()) {
                 if (node.isEmpty()) continue;
                 long expiry = timedPermissionsTime.getOrDefault(Strings.nullToEmpty(world) + ":" + node, 0L);
-                holder.setPermission(MigrationUtils.parseNode(node, true).setWorld(world).setExpiry(expiry).build());
+                holder.setNode(DataType.NORMAL, MigrationUtils.parseNode(node, true).withContext(DefaultContextKeys.WORLD_KEY, world).expiry(expiry).build(), true);
             }
         }
 
@@ -251,7 +255,7 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
                     }
                 }
 
-                holder.setPermission(NodeFactory.buildGroupNode(MigrationUtils.standardizeName(parentName)).setWorld(world).setExpiry(expiry).build());
+                holder.setNode(DataType.NORMAL, Inheritance.builder(MigrationUtils.standardizeName(parentName)).withContext(DefaultContextKeys.WORLD_KEY, world).expiry(expiry).build(), true);
 
                 // migrate primary groups
                 if (world == null && holder instanceof User && expiry == 0) {
@@ -262,10 +266,10 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
                 }
             }
 
-            if (primary != null && !primary.isEmpty() && !primary.equalsIgnoreCase(NodeFactory.DEFAULT_GROUP_NAME)) {
+            if (primary != null && !primary.isEmpty() && !primary.equalsIgnoreCase(GroupManager.DEFAULT_GROUP_NAME)) {
                 User user = ((User) holder);
                 user.getPrimaryGroup().setStoredValue(primary);
-                user.unsetPermission(NodeFactory.buildGroupNode(NodeFactory.DEFAULT_GROUP_NAME).build());
+                holder.unsetNode(DataType.NORMAL, Inheritance.builder(GroupManager.DEFAULT_GROUP_NAME).build());
             }
         }
 
@@ -274,11 +278,11 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
         String suffix = entity.getOwnSuffix();
 
         if (prefix != null && !prefix.isEmpty()) {
-            holder.setPermission(NodeFactory.buildPrefixNode(weight, prefix).build());
+            holder.setNode(DataType.NORMAL, Prefix.builder(prefix, weight).build(), true);
         }
 
         if (suffix != null && !suffix.isEmpty()) {
-            holder.setPermission(NodeFactory.buildSuffixNode(weight, suffix).build());
+            holder.setNode(DataType.NORMAL, Suffix.builder(suffix, weight).build(), true);
         }
 
         // migrate options
@@ -290,9 +294,9 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
                 }
 
                 String key = opt.getKey().toLowerCase();
-                boolean ignore = key.equals(NodeTypes.PREFIX_KEY) ||
-                        key.equals(NodeTypes.SUFFIX_KEY) ||
-                        key.equals(NodeTypes.WEIGHT_KEY) ||
+                boolean ignore = key.equals("prefix") ||
+                        key.equals("suffix") ||
+                        key.equals("weight") ||
                         key.equals("rank") ||
                         key.equals("rank-ladder") ||
                         key.equals("name") ||
@@ -303,18 +307,15 @@ public class MigrationPermissionsEx extends SubCommand<Object> {
                     continue;
                 }
 
-                holder.setPermission(NodeFactory.buildMetaNode(opt.getKey(), opt.getValue()).setWorld(world).build());
+                holder.setNode(DataType.NORMAL, Meta.builder(opt.getKey(), opt.getValue()).withContext(DefaultContextKeys.WORLD_KEY, world).build(), true);
             }
         }
     }
 
     private static String standardizeWorld(String world) {
-        if (world != null && (world.isEmpty() || world.equals("*"))) {
-            world = null;
+        if (world == null || world.isEmpty() || world.equals("*")) {
+            world = "global";
         }
-        if (world != null) {
-            world = world.toLowerCase();
-        }
-        return world;
+        return world.toLowerCase();
     }
 }

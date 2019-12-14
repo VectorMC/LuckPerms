@@ -32,12 +32,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
-import me.lucko.luckperms.api.HeldPermission;
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ImmutableContextSet;
-import me.lucko.luckperms.api.event.cause.CreationCause;
 import me.lucko.luckperms.common.bulkupdate.comparison.Constraint;
 import me.lucko.luckperms.common.bulkupdate.comparison.StandardComparison;
+import me.lucko.luckperms.common.context.contextset.ImmutableContextSetImpl;
 import me.lucko.luckperms.common.model.manager.group.AbstractGroupManager;
 import me.lucko.luckperms.common.storage.misc.DataConstraints;
 import me.lucko.luckperms.common.util.ImmutableCollectors;
@@ -48,6 +45,11 @@ import me.lucko.luckperms.sponge.service.ProxyFactory;
 import me.lucko.luckperms.sponge.service.model.LPSubject;
 import me.lucko.luckperms.sponge.service.model.LPSubjectCollection;
 import me.lucko.luckperms.sponge.service.model.LPSubjectReference;
+
+import net.luckperms.api.context.ImmutableContextSet;
+import net.luckperms.api.event.cause.CreationCause;
+import net.luckperms.api.node.HeldNode;
+import net.luckperms.api.util.Tristate;
 
 import org.spongepowered.api.service.permission.PermissionService;
 import org.spongepowered.api.service.permission.SubjectCollection;
@@ -63,35 +65,37 @@ import java.util.function.Predicate;
 
 public class SpongeGroupManager extends AbstractGroupManager<SpongeGroup> implements LPSubjectCollection {
     private final LPSpongePlugin plugin;
+    private final LoadingCache<String, LPSubject> subjectLoadingCache;
+
     private SubjectCollection spongeProxy = null;
-
-    private final LoadingCache<String, LPSubject> subjectLoadingCache = Caffeine.newBuilder()
-            .expireAfterWrite(1, TimeUnit.MINUTES)
-            .build(s -> {
-                SpongeGroup group = getIfLoaded(s);
-                if (group != null) {
-                    // they're already loaded, but the data might not actually be there yet
-                    // if stuff is being loaded, then the user's i/o lock will be locked by the storage impl
-                    group.getIoLock().lock();
-                    group.getIoLock().unlock();
-
-                    return group.sponge();
-                }
-
-                // Request load
-                getPlugin().getStorage().createAndLoadGroup(s, CreationCause.INTERNAL).join();
-
-                group = getIfLoaded(s);
-                if (group == null) {
-                    getPlugin().getLogger().severe("Error whilst loading group '" + s + "'.");
-                    throw new RuntimeException();
-                }
-
-                return group.sponge();
-            });
 
     public SpongeGroupManager(LPSpongePlugin plugin) {
         this.plugin = plugin;
+        this.subjectLoadingCache = Caffeine.newBuilder()
+                .executor(plugin.getBootstrap().getScheduler().async())
+                .expireAfterWrite(1, TimeUnit.MINUTES)
+                .build(s -> {
+                    SpongeGroup group = getIfLoaded(s);
+                    if (group != null) {
+                        // they're already loaded, but the data might not actually be there yet
+                        // if stuff is being loaded, then the user's i/o lock will be locked by the storage impl
+                        group.getIoLock().lock();
+                        group.getIoLock().unlock();
+
+                        return group.sponge();
+                    }
+
+                    // Request load
+                    getPlugin().getStorage().createAndLoadGroup(s, CreationCause.INTERNAL).join();
+
+                    group = getIfLoaded(s);
+                    if (group == null) {
+                        getPlugin().getLogger().severe("Error whilst loading group '" + s + "'.");
+                        throw new RuntimeException();
+                    }
+
+                    return group.sponge();
+                });
     }
 
     @Override
@@ -189,10 +193,10 @@ public class SpongeGroupManager extends AbstractGroupManager<SpongeGroup> implem
         return CompletableFuture.supplyAsync(() -> {
             ImmutableMap.Builder<LPSubjectReference, Boolean> ret = ImmutableMap.builder();
 
-            List<HeldPermission<String>> lookup = this.plugin.getStorage().getGroupsWithPermission(Constraint.of(StandardComparison.EQUAL, permission)).join();
-            for (HeldPermission<String> holder : lookup) {
-                if (holder.asNode().getFullContexts().equals(ImmutableContextSet.empty())) {
-                    ret.put(getService().getReferenceFactory().obtain(getIdentifier(), holder.getHolder()), holder.getValue());
+            List<HeldNode<String>> lookup = this.plugin.getStorage().getGroupsWithPermission(Constraint.of(StandardComparison.EQUAL, permission)).join();
+            for (HeldNode<String> holder : lookup) {
+                if (holder.getNode().getContexts().equals(ImmutableContextSetImpl.EMPTY)) {
+                    ret.put(getService().getReferenceFactory().obtain(getIdentifier(), holder.getHolder()), holder.getNode().getValue());
                 }
             }
 
@@ -205,10 +209,10 @@ public class SpongeGroupManager extends AbstractGroupManager<SpongeGroup> implem
         return CompletableFuture.supplyAsync(() -> {
             ImmutableMap.Builder<LPSubjectReference, Boolean> ret = ImmutableMap.builder();
 
-            List<HeldPermission<String>> lookup = this.plugin.getStorage().getGroupsWithPermission(Constraint.of(StandardComparison.EQUAL, permission)).join();
-            for (HeldPermission<String> holder : lookup) {
-                if (holder.asNode().getFullContexts().equals(contexts)) {
-                    ret.put(getService().getReferenceFactory().obtain(getIdentifier(), holder.getHolder()), holder.getValue());
+            List<HeldNode<String>> lookup = this.plugin.getStorage().getGroupsWithPermission(Constraint.of(StandardComparison.EQUAL, permission)).join();
+            for (HeldNode<String> holder : lookup) {
+                if (holder.getNode().getContexts().equals(contexts)) {
+                    ret.put(getService().getReferenceFactory().obtain(getIdentifier(), holder.getHolder()), holder.getNode().getValue());
                 }
             }
 
@@ -220,7 +224,7 @@ public class SpongeGroupManager extends AbstractGroupManager<SpongeGroup> implem
     public ImmutableMap<LPSubject, Boolean> getLoadedWithPermission(String permission) {
         return getAll().values().stream()
                 .map(SpongeGroup::sponge)
-                .map(sub -> Maps.immutableEntry(sub, sub.getPermissionValue(ImmutableContextSet.empty(), permission)))
+                .map(sub -> Maps.immutableEntry(sub, sub.getPermissionValue(ImmutableContextSetImpl.EMPTY, permission)))
                 .filter(pair -> pair.getValue() != Tristate.UNDEFINED)
                 .collect(ImmutableCollectors.toMap(Map.Entry::getKey, sub -> sub.getValue().asBoolean()));
     }

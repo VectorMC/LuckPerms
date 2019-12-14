@@ -31,9 +31,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 
-import me.lucko.luckperms.api.Tristate;
 import me.lucko.luckperms.bukkit.LPBukkitPlugin;
-import me.lucko.luckperms.common.buffer.Cache;
+import me.lucko.luckperms.common.cache.Cache;
+
+import net.luckperms.api.util.Tristate;
 
 import org.bukkit.permissions.Permission;
 import org.bukkit.plugin.PluginManager;
@@ -95,6 +96,8 @@ public final class LPDefaultsMap implements Map<Boolean, Set<Permission>> {
 
     private void invalidate(boolean op) {
         getCache(op).invalidate();
+        this.plugin.getUserManager().invalidateAllPermissionCalculators();
+        this.plugin.getGroupManager().invalidateAllPermissionCalculators();
     }
 
     /**
@@ -106,7 +109,7 @@ public final class LPDefaultsMap implements Map<Boolean, Set<Permission>> {
      */
     public Tristate lookupDefaultPermission(String permission, boolean isOp) {
         Map<String, Boolean> map = getCache(isOp).get();
-        return Tristate.fromNullableBoolean(map.get(permission));
+        return Tristate.of(map.get(permission));
     }
 
     // return wrappers around this map impl
@@ -173,6 +176,13 @@ public final class LPDefaultsMap implements Map<Boolean, Set<Permission>> {
         @Override
         public boolean addAll(@NonNull Collection<? extends Permission> collection) {
             boolean ret = super.addAll(collection);
+            invalidate(this.op);
+            return ret;
+        }
+
+        @Override
+        public boolean remove(@NonNull Object object) {
+            boolean ret = super.remove(object);
             invalidate(this.op);
             return ret;
         }

@@ -4,16 +4,14 @@ plugins {
 }
 
 repositories {
-    maven {
-        name 'velocity-repo'
-        url 'https://repo.velocitypowered.com/snapshots/'
-    }
+    maven { url 'https://repo.velocitypowered.com/snapshots/' }
 }
 
 dependencies {
     compile project(':common')
 
-    compileOnly 'com.velocitypowered:velocity-api:1.0-20181206.010534-227'
+    compileOnly 'com.velocitypowered:velocity-api:1.0-SNAPSHOT'
+    annotationProcessor 'com.velocitypowered:velocity-api:1.0-SNAPSHOT'
 }
 
 blossom {
@@ -25,10 +23,11 @@ shadowJar {
     archiveName = "LuckPerms-Velocity-${project.ext.fullVersion}.jar"
 
     dependencies {
+        include(dependency('net.luckperms:.*'))
         include(dependency('me.lucko.luckperms:.*'))
     }
 
-    // relocate 'net.kyori.text', 'me.lucko.luckperms.lib.text'   (included in velocity!)
+    //relocate 'net.kyori.text', 'me.lucko.luckperms.lib.text'
     relocate 'net.kyori.event', 'me.lucko.luckperms.lib.eventbus'
     relocate 'com.github.benmanes.caffeine', 'me.lucko.luckperms.lib.caffeine'
     relocate 'okio', 'me.lucko.luckperms.lib.okio'

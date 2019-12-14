@@ -25,8 +25,8 @@
 
 package me.lucko.luckperms.common.calculator.processor;
 
-import me.lucko.luckperms.api.Tristate;
 import me.lucko.luckperms.common.calculator.PermissionCalculator;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 
 import java.util.Map;
 
@@ -44,7 +44,7 @@ public interface PermissionProcessor {
      * @param permission the permission
      * @return a tristate
      */
-    Tristate hasPermission(String permission);
+    TristateResult hasPermission(String permission);
 
     /**
      * Sets the source permissions which should be used by this processor
@@ -59,6 +59,13 @@ public interface PermissionProcessor {
      * Called after a change has been made to the source map
      */
     default void refresh() {
+
+    }
+
+    /**
+     * Called after the parent calculator has been invalidated
+     */
+    default void invalidate() {
 
     }
 

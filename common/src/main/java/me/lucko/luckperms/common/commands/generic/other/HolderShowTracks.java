@@ -27,7 +27,6 @@ package me.lucko.luckperms.common.commands.generic.other;
 
 import com.google.common.collect.Maps;
 
-import me.lucko.luckperms.api.Node;
 import me.lucko.luckperms.common.command.CommandResult;
 import me.lucko.luckperms.common.command.abstraction.SubCommand;
 import me.lucko.luckperms.common.command.access.ArgumentPermissions;
@@ -37,11 +36,15 @@ import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.common.locale.command.CommandSpec;
 import me.lucko.luckperms.common.locale.message.Message;
 import me.lucko.luckperms.common.model.Group;
+import me.lucko.luckperms.common.model.HolderType;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.model.Track;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.util.Predicates;
+
+import net.luckperms.api.node.Node;
+import net.luckperms.api.node.types.InheritanceNode;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -71,15 +74,14 @@ public class HolderShowTracks<T extends PermissionHolder> extends SubCommand<T> 
 
         List<Map.Entry<Track, String>> lines = new ArrayList<>();
 
-        if (holder.getType().isUser()) {
+        if (holder.getType() == HolderType.USER) {
             // if the holder is a user, we want to query parent groups for tracks
-            Set<Node> nodes = holder.enduringData().immutable().values().stream()
-                    .filter(Node::isGroupNode)
+            Set<InheritanceNode> nodes = holder.normalData().immutableInheritance().values().stream()
                     .filter(Node::getValue)
-                    .filter(Node::isPermanent)
+                    .filter(n -> !n.hasExpiry())
                     .collect(Collectors.toSet());
 
-            for (Node node : nodes) {
+            for (InheritanceNode node : nodes) {
                 String groupName = node.getGroupName();
                 List<Track> tracks = plugin.getTrackManager().getAll().values().stream()
                         .filter(t -> t.containsGroup(groupName))

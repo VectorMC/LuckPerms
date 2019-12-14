@@ -25,8 +25,6 @@
 
 package me.lucko.luckperms.bungee;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.LuckPermsApi;
 import me.lucko.luckperms.bungee.calculator.BungeeCalculatorFactory;
 import me.lucko.luckperms.bungee.context.BackendServerCalculator;
 import me.lucko.luckperms.bungee.context.BungeeContextManager;
@@ -52,13 +50,14 @@ import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.tasks.CacheHousekeepingTask;
 import me.lucko.luckperms.common.tasks.ExpireTemporaryTask;
 
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.query.QueryOptions;
 import net.md_5.bungee.api.connection.ProxiedPlayer;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -94,7 +93,9 @@ public class LPBungeePlugin extends AbstractLuckPermsPlugin {
 
     @Override
     protected Set<Dependency> getGlobalDependencies() {
-        return EnumSet.of(Dependency.TEXT, Dependency.TEXT_ADAPTER_BUNGEECORD, Dependency.CAFFEINE, Dependency.OKIO, Dependency.OKHTTP, Dependency.EVENT);
+        Set<Dependency> dependencies = super.getGlobalDependencies();
+        dependencies.add(Dependency.TEXT_ADAPTER_BUNGEECORD);
+        return dependencies;
     }
 
     @Override
@@ -141,7 +142,7 @@ public class LPBungeePlugin extends AbstractLuckPermsPlugin {
         this.contextManager.registerCalculator(new BackendServerCalculator(this));
 
         if (this.bootstrap.getProxy().getPluginManager().getPlugin("RedisBungee") != null) {
-            this.contextManager.registerStaticCalculator(new RedisBungeeCalculator());
+            this.contextManager.registerCalculator(new RedisBungeeCalculator());
         }
     }
 
@@ -156,7 +157,7 @@ public class LPBungeePlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    protected void registerApiOnPlatform(LuckPermsApi api) {
+    protected void registerApiOnPlatform(LuckPerms api) {
         // BungeeCord doesn't have a services manager
     }
 
@@ -187,8 +188,8 @@ public class LPBungeePlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    public Optional<Contexts> getContextForUser(User user) {
-        return this.bootstrap.getPlayer(user.getUuid()).map(player -> this.contextManager.getApplicableContexts(player));
+    public Optional<QueryOptions> getQueryOptionsForUser(User user) {
+        return this.bootstrap.getPlayer(user.getUniqueId()).map(player -> this.contextManager.getQueryOptions(player));
     }
 
     @Override

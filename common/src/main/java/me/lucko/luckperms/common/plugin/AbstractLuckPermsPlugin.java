@@ -25,10 +25,10 @@
 
 package me.lucko.luckperms.common.plugin;
 
-import me.lucko.luckperms.api.LuckPermsApi;
 import me.lucko.luckperms.common.actionlog.LogDispatcher;
 import me.lucko.luckperms.common.api.ApiRegistrationUtil;
 import me.lucko.luckperms.common.api.LuckPermsApiProvider;
+import me.lucko.luckperms.common.api.MinimalApiProvider;
 import me.lucko.luckperms.common.calculator.CalculatorFactory;
 import me.lucko.luckperms.common.config.AbstractConfiguration;
 import me.lucko.luckperms.common.config.ConfigKeys;
@@ -39,6 +39,7 @@ import me.lucko.luckperms.common.dependencies.Dependency;
 import me.lucko.luckperms.common.dependencies.DependencyManager;
 import me.lucko.luckperms.common.event.AbstractEventBus;
 import me.lucko.luckperms.common.event.EventFactory;
+import me.lucko.luckperms.common.extension.SimpleExtensionManager;
 import me.lucko.luckperms.common.inheritance.InheritanceHandler;
 import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.common.locale.message.Message;
@@ -53,8 +54,14 @@ import me.lucko.luckperms.common.storage.implementation.file.FileWatcher;
 import me.lucko.luckperms.common.tasks.SyncTask;
 import me.lucko.luckperms.common.treeview.PermissionRegistry;
 import me.lucko.luckperms.common.verbose.VerboseHandler;
+import me.lucko.luckperms.common.web.BytebinClient;
+
+import net.luckperms.api.LuckPerms;
+
+import okhttp3.OkHttpClient;
 
 import java.io.IOException;
+import java.util.EnumSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -70,6 +77,7 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
     private LogDispatcher logDispatcher;
     private LuckPermsConfiguration configuration;
     private LocaleManager localeManager;
+    private BytebinClient bytebin;
     private FileWatcher fileWatcher = null;
     private Storage storage;
     private InternalMessagingService messagingService = null;
@@ -78,6 +86,7 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
     private CalculatorFactory calculatorFactory;
     private LuckPermsApiProvider apiProvider;
     private EventFactory eventFactory;
+    private SimpleExtensionManager extensionManager;
 
     /**
      * Performs the initial actions to load the plugin
@@ -95,6 +104,9 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         // send the startup banner
         displayBanner(getConsoleSender());
 
+        // minimal api
+        ApiRegistrationUtil.registerProvider(MinimalApiProvider.INSTANCE);
+
         // load some utilities early
         this.verboseHandler = new VerboseHandler(getBootstrap().getScheduler());
         this.permissionRegistry = new PermissionRegistry(getBootstrap().getScheduler());
@@ -108,9 +120,12 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         this.localeManager = new LocaleManager();
         this.localeManager.tryLoad(this, getBootstrap().getConfigDirectory().resolve("lang.yml"));
 
+        // setup a bytebin instance
+        this.bytebin = new BytebinClient(new OkHttpClient(), getConfiguration().get(ConfigKeys.BYTEBIN_URL), "luckperms");
+
         // now the configuration is loaded, we can create a storage factory and load initial dependencies
         StorageFactory storageFactory = new StorageFactory(this);
-        Set<StorageType> storageTypes = storageFactory.getRequiredTypes(StorageType.H2);
+        Set<StorageType> storageTypes = storageFactory.getRequiredTypes();
         this.dependencyManager.loadStorageDependencies(storageTypes);
 
         // register listeners
@@ -127,7 +142,7 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         }
 
         // initialise storage
-        this.storage = storageFactory.getInstance(StorageType.H2);
+        this.storage = storageFactory.getInstance();
         this.messagingService = provideMessagingFactory().getInstance();
 
         // setup the update task buffer
@@ -148,7 +163,7 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
 
         // setup contextmanager & register common calculators
         setupContextManager();
-        getContextManager().registerStaticCalculator(new LPStaticContextsCalculator(getConfiguration()));
+        getContextManager().registerCalculator(new LPStaticContextsCalculator(getConfiguration()));
 
         // setup platform hooks
         setupPlatformHooks();
@@ -158,6 +173,10 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         this.eventFactory = new EventFactory(provideEventBus(this.apiProvider));
         ApiRegistrationUtil.registerProvider(this.apiProvider);
         registerApiOnPlatform(this.apiProvider);
+
+        // setup extension manager
+        this.extensionManager = new SimpleExtensionManager(this);
+        this.extensionManager.loadExtensions(getBootstrap().getConfigDirectory().resolve("extensions"));
 
         // schedule update tasks
         int mins = getConfiguration().get(ConfigKeys.SYNC_TIME);
@@ -187,8 +206,17 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         this.permissionRegistry.stop();
         this.verboseHandler.stop();
 
+        // unload extensions
+        this.extensionManager.close();
+
         // remove any hooks into the platform
         removePlatformHooks();
+
+        // close messaging service
+        if (this.messagingService != null) {
+            getLogger().info("Closing messaging service...");
+            this.messagingService.close();
+        }
 
         // close storage
         getLogger().info("Closing storage...");
@@ -197,12 +225,6 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         // close file watcher
         if (this.fileWatcher != null) {
             this.fileWatcher.close();
-        }
-
-        // close messaging service
-        if (this.messagingService != null) {
-            getLogger().info("Closing messaging service...");
-            this.messagingService.close();
         }
 
         // unregister api
@@ -215,8 +237,19 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
         getLogger().info("Goodbye!");
     }
 
+    protected Set<Dependency> getGlobalDependencies() {
+        return EnumSet.of(
+                Dependency.TEXT,
+                Dependency.TEXT_SERIALIZER_GSON,
+                Dependency.TEXT_SERIALIZER_LEGACY,
+                Dependency.CAFFEINE,
+                Dependency.OKIO,
+                Dependency.OKHTTP,
+                Dependency.EVENT
+        );
+    }
+
     protected abstract void setupSenderFactory();
-    protected abstract Set<Dependency> getGlobalDependencies();
     protected abstract ConfigurationAdapter provideConfigurationAdapter();
     protected abstract void registerPlatformListeners();
     protected abstract MessagingFactory<?> provideMessagingFactory();
@@ -226,7 +259,7 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
     protected abstract void setupContextManager();
     protected abstract void setupPlatformHooks();
     protected abstract AbstractEventBus provideEventBus(LuckPermsApiProvider apiProvider);
-    protected abstract void registerApiOnPlatform(LuckPermsApi api);
+    protected abstract void registerApiOnPlatform(LuckPerms api);
     protected abstract void registerHousekeepingTasks();
     protected abstract void performFinalSetup();
 
@@ -275,6 +308,11 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
     }
 
     @Override
+    public BytebinClient getBytebin() {
+        return this.bytebin;
+    }
+
+    @Override
     public Optional<FileWatcher> getFileWatcher() {
         return Optional.ofNullable(this.fileWatcher);
     }
@@ -307,6 +345,11 @@ public abstract class AbstractLuckPermsPlugin implements LuckPermsPlugin {
     @Override
     public LuckPermsApiProvider getApiProvider() {
         return this.apiProvider;
+    }
+
+    @Override
+    public SimpleExtensionManager getExtensionManager() {
+        return this.extensionManager;
     }
 
     @Override

@@ -25,7 +25,6 @@
 
 package me.lucko.luckperms.common.locale.message;
 
-import me.lucko.luckperms.common.command.CommandManager;
 import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.util.TextUtils;
@@ -60,11 +59,12 @@ public enum Message {
             false
     ),
 
-    EMPTY("{}", true),
+    BLANK("{}", true),
     PLAYER_ONLINE("&aOnline", false),
     PLAYER_OFFLINE("&cOffline", false),
-    LOADING_DATABASE_ERROR("&cA database error occurred whilst loading permissions data. Please try again later.", true),
-    LOADING_STATE_ERROR("&cPermissions data for your user was not loaded during the pre-login stage - unable to continue. Please try again later.", true),
+    LOADING_DATABASE_ERROR("&cA database error occurred whilst loading permissions data. Please try again later. If you are a server admin, please check the console for any errors.", true),
+    LOADING_STATE_ERROR("&cPermissions data for your user was not loaded during the pre-login stage - unable to continue. Please try again later. If you are a server admin, please check the console for any errors.", true),
+    LOADING_STATE_ERROR_CB_OFFLINE_MODE("&cPermissions data for your user was not loaded during the pre-login stage - this is likely due to a conflict between CraftBukkit and the online-mode setting. Please check the server console for more information.", true),
     LOADING_SETUP_ERROR("&cAn unexpected error occurred whilst setting up your permissions data. Please try again later.", true),
     OP_DISABLED("&bThe vanilla OP system is disabled on this server.", false),
     OP_DISABLED_SPONGE("&2Please note that Server Operator status has no effect on Sponge permission checks when a permission plugin is installed. Please edit user data directly.", true),
@@ -151,13 +151,12 @@ public enum Message {
 
     APPLY_EDITS_INVALID_CODE("&cInvalid code. &7({})", true),
     APPLY_EDITS_UNABLE_TO_READ("&cUnable to read data using the given code. &7({})", true),
-    APPLY_EDITS_NO_TARGET("&cUnable to parse the target of the edit.", true),
-    APPLY_EDITS_TARGET_GROUP_NOT_EXISTS("&cTarget group &4{}&c does not exist.", true),
+    APPLY_EDITS_UNKNOWN_TYPE("&cUnable to apply edit to the specified object type. &7({})", true),
     APPLY_EDITS_TARGET_USER_NOT_UUID("&cTarget user &4{}&c is not a valid uuid.", true),
     APPLY_EDITS_TARGET_USER_UNABLE_TO_LOAD("&cUnable to load target user &4{}&c.", true),
     APPLY_EDITS_TARGET_UNKNOWN("&cInvalid target. &7({})", true),
     APPLY_EDITS_TARGET_NO_CHANGES_PRESENT("&aNo changes were applied from the web editor. The returned data didn't contain any edits.", true),
-    APPLY_EDITS_SUCCESS("&aWeb editor data was applied to &b{}&a successfully.", true),
+    APPLY_EDITS_SUCCESS("&aWeb editor data was applied to {} &b{}&a successfully.", true),
     APPLY_EDITS_SUCCESS_SUMMARY("&7(&a{} &7{} and &c{} &7{})", true),
     APPLY_EDITS_DIFF_ADDED("&a+  &f{}", false),
     APPLY_EDITS_DIFF_REMOVED("&c-  &f{}", false),
@@ -217,6 +216,9 @@ public enum Message {
     ),
 
     INFO_STORAGE_META("&f-     &3{}: {}", true),
+
+    INFO_EXTENSIONS("{PREFIX}&f-  &bExtensions:", true),
+    INFO_EXTENSION_ENTRY("&f-     &3{}", true),
 
     INFO_MIDDLE(
             "{PREFIX}&f-  &bMessaging: &f{}" + "\n" +
@@ -448,14 +450,14 @@ public enum Message {
     LOG_EXPORT_NOT_WRITABLE("&cError: File &4{}&c is not writable.", true),
     LOG_EXPORT_EMPTY("&cThe log is empty and therefore cannot be exported.", true),
     LOG_EXPORT_FAILURE("&cAn unexpected error occured whilst writing to the file.", true),
-    LOG_EXPORT_SUCCESS("&aSuccessfully exported the log to &b{}&a.", true),
+    LOG_EXPORT_SUCCESS("&aSuccessfully exported to &b{}&a.", true),
 
     IMPORT_ALREADY_RUNNING("&cAnother import process is already running. Please wait for it to finish and try again.", true),
     EXPORT_ALREADY_RUNNING("&cAnother export process is already running. Please wait for it to finish and try again.", true),
     FILE_NOT_WITHIN_DIRECTORY("&cError: File &4{}&c must be a direct child of the data directory.", true),
-    IMPORT_LOG_DOESNT_EXIST("&cError: File &4{}&c does not exist.", true),
-    IMPORT_LOG_NOT_READABLE("&cError: File &4{}&c is not readable.", true),
-    IMPORT_LOG_FAILURE("&cAn unexpected error occured whilst reading from the log file.", true),
+    IMPORT_FILE_DOESNT_EXIST("&cError: File &4{}&c does not exist.", true),
+    IMPORT_FILE_NOT_READABLE("&cError: File &4{}&c is not readable.", true),
+    IMPORT_FILE_READ_FAILURE("&cAn unexpected error occured whilst reading from the import file.", true),
 
     IMPORT_PROGRESS("&b(Import) &b-> &f{}&f% complete &7- &b{}&f/&b{} &foperations complete with &c{} &ferrors.", true),
     IMPORT_PROGRESS_SIN("&b(Import) &b-> &f{}&f% complete &7- &b{}&f/&b{} &foperations complete with &c{} &ferror.", true),
@@ -517,7 +519,7 @@ public enum Message {
     }
 
     public TextComponent asComponent(@Nullable LocaleManager localeManager, Object... objects) {
-        return TextUtils.fromLegacy(format(localeManager, objects), CommandManager.AMPERSAND_CHAR);
+        return TextUtils.fromLegacy(format(localeManager, objects), TextUtils.AMPERSAND_CHAR);
     }
 
     public void send(Sender sender, Object... objects) {

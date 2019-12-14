@@ -25,35 +25,35 @@
 
 package me.lucko.luckperms.common.config;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.TemporaryMergeBehaviour;
-import me.lucko.luckperms.api.context.ContextSet;
-import me.lucko.luckperms.api.metastacking.DuplicateRemovalFunction;
-import me.lucko.luckperms.api.metastacking.MetaStackDefinition;
 import me.lucko.luckperms.common.command.utils.ArgumentParser;
-import me.lucko.luckperms.common.defaultassignments.AssignmentRule;
+import me.lucko.luckperms.common.context.contextset.ImmutableContextSetImpl;
 import me.lucko.luckperms.common.graph.TraversalAlgorithm;
 import me.lucko.luckperms.common.metastacking.SimpleMetaStackDefinition;
 import me.lucko.luckperms.common.metastacking.StandardStackElements;
+import me.lucko.luckperms.common.model.PrimaryGroupHolder;
 import me.lucko.luckperms.common.model.User;
-import me.lucko.luckperms.common.primarygroup.AllParentsByWeightHolder;
-import me.lucko.luckperms.common.primarygroup.ParentsByWeightHolder;
-import me.lucko.luckperms.common.primarygroup.PrimaryGroupHolder;
-import me.lucko.luckperms.common.primarygroup.StoredHolder;
+import me.lucko.luckperms.common.storage.StorageType;
 import me.lucko.luckperms.common.storage.implementation.split.SplitStorageType;
 import me.lucko.luckperms.common.storage.misc.StorageCredentials;
 import me.lucko.luckperms.common.util.ImmutableCollectors;
+
+import net.luckperms.api.metastacking.DuplicateRemovalFunction;
+import net.luckperms.api.metastacking.MetaStackDefinition;
+import net.luckperms.api.model.data.TemporaryNodeMergeStrategy;
+import net.luckperms.api.query.Flag;
+import net.luckperms.api.query.QueryOptions;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 
 import static me.lucko.luckperms.common.config.ConfigKeyTypes.booleanKey;
@@ -70,20 +70,12 @@ import static me.lucko.luckperms.common.config.ConfigKeyTypes.stringKey;
  * to function a bit like an enum, but with generics.</p>
  */
 public final class ConfigKeys {
+    private ConfigKeys() {}
 
     /**
      * The name of the server
      */
-    public static final ConfigKey<String> SERVER = customKey(c -> {
-        if (c.getBoolean("use-server-properties-name", false)) {
-            String serverName = c.getPlugin().getBootstrap().getServerName();
-            if (serverName != null && !serverName.equals("Unknown Server")) {
-                return serverName.toLowerCase();
-            }
-        }
-
-        return c.getString("server", "global").toLowerCase();
-    });
+    public static final ConfigKey<String> SERVER = lowercaseStringKey("server", "global");
 
     /**
      * How many minutes to wait between syncs. A value <= 0 will disable syncing.
@@ -99,16 +91,21 @@ public final class ConfigKeys {
     /**
      * The default global contexts instance
      */
-    public static final ConfigKey<Contexts> GLOBAL_CONTEXTS = customKey(c -> {
-        return Contexts.of(
-                ContextSet.empty(),
-                c.getBoolean("include-global", true),
-                c.getBoolean("include-global-world", true),
-                true,
-                c.getBoolean("apply-global-groups", true),
-                c.getBoolean("apply-global-world-groups", true),
-                false
-        );
+    public static final ConfigKey<QueryOptions> GLOBAL_CONTEXTS = customKey(c -> {
+        Set<Flag> flags = EnumSet.of(Flag.RESOLVE_INHERITANCE);
+        if (c.getBoolean("include-global", true)) {
+            flags.add(Flag.INCLUDE_NODES_WITHOUT_SERVER_CONTEXT);
+        }
+        if (c.getBoolean("include-global-world", true)) {
+            flags.add(Flag.INCLUDE_NODES_WITHOUT_WORLD_CONTEXT);
+        }
+        if (c.getBoolean("apply-global-groups", true)) {
+            flags.add(Flag.APPLY_INHERITANCE_NODES_WITHOUT_SERVER_CONTEXT);
+        }
+        if (c.getBoolean("apply-global-world-groups", true)) {
+            flags.add(Flag.APPLY_INHERITANCE_NODES_WITHOUT_WORLD_CONTEXT);
+        }
+        return QueryOptions.contextual(ImmutableContextSetImpl.EMPTY, flags);
     });
 
     /**
@@ -134,7 +131,7 @@ public final class ConfigKeys {
     /**
      * Controls how temporary add commands should behave
      */
-    public static final ConfigKey<TemporaryMergeBehaviour> TEMPORARY_ADD_BEHAVIOUR = customKey(c -> {
+    public static final ConfigKey<TemporaryNodeMergeStrategy> TEMPORARY_ADD_BEHAVIOUR = customKey(c -> {
         String option = c.getString("temporary-add-behaviour", "deny").toLowerCase();
         if (!option.equals("deny") && !option.equals("replace") && !option.equals("accumulate")) {
             option = "deny";
@@ -162,11 +159,11 @@ public final class ConfigKeys {
         String option = PRIMARY_GROUP_CALCULATION_METHOD.get(c);
         switch (option) {
             case "stored":
-                return (Function<User, PrimaryGroupHolder>) StoredHolder::new;
+                return (Function<User, PrimaryGroupHolder>) PrimaryGroupHolder.Stored::new;
             case "parents-by-weight":
-                return (Function<User, PrimaryGroupHolder>) ParentsByWeightHolder::new;
+                return (Function<User, PrimaryGroupHolder>) PrimaryGroupHolder.ParentsByWeight::new;
             default:
-                return (Function<User, PrimaryGroupHolder>) AllParentsByWeightHolder::new;
+                return (Function<User, PrimaryGroupHolder>) PrimaryGroupHolder.AllParentsByWeight::new;
         }
     }));
 
@@ -261,6 +258,12 @@ public final class ConfigKeys {
                 return TraversalAlgorithm.DEPTH_FIRST_PRE_ORDER;
         }
     });
+
+    /**
+     * If a final sort according to "inheritance rules" should be performed after the traversal algorithm
+     * has resolved the inheritance tree
+     */
+    public static final ConfigKey<Boolean> POST_TRAVERSAL_INHERITANCE_SORT = booleanKey("post-traversal-inheritance-sort", false);
 
     /**
      * The configured group weightings
@@ -358,6 +361,16 @@ public final class ConfigKeys {
     public static final ConfigKey<Boolean> VAULT_UNSAFE_LOOKUPS = booleanKey("vault-unsafe-lookups", false);
 
     /**
+     * Controls which group LuckPerms should use for NPC players when handling Vault requests
+     */
+    public static final ConfigKey<String> VAULT_NPC_GROUP = stringKey("vault-npc-group", "default");
+
+    /**
+     * Controls how LuckPerms should consider the OP status of NPC players when handing Vault requests
+     */
+    public static final ConfigKey<Boolean> VAULT_NPC_OP_STATUS = booleanKey("vault-npc-op-status", false);
+
+    /**
      * If the vault server option should be used
      */
     public static final ConfigKey<Boolean> USE_VAULT_SERVER = booleanKey("use-vault-server", true);
@@ -406,21 +419,6 @@ public final class ConfigKeys {
     public static final ConfigKey<Map<String, String>> GROUP_NAME_REWRITES = mapKey("group-name-rewrite");
 
     /**
-     * The default assignments being applied by the plugin
-     */
-    public static final ConfigKey<List<AssignmentRule>> DEFAULT_ASSIGNMENTS = customKey(c -> {
-        return c.getKeys("default-assignments", ImmutableList.of()).stream().map(name -> {
-            String hasTrue = c.getString("default-assignments." + name + ".if.has-true", null);
-            String hasFalse = c.getString("default-assignments." + name + ".if.has-false", null);
-            String lacks = c.getString("default-assignments." + name + ".if.lacks", null);
-            List<String> give = ImmutableList.copyOf(c.getStringList("default-assignments." + name + ".give", ImmutableList.of()));
-            List<String> take = ImmutableList.copyOf(c.getStringList("default-assignments." + name + ".take", ImmutableList.of()));
-            String pg = c.getString("default-assignments." + name + ".set-primary-group", null);
-            return new AssignmentRule(hasTrue, hasFalse, lacks, give, take, pg);
-        }).collect(ImmutableCollectors.toList());
-    });
-
-    /**
      * The database settings, username, password, etc for use by any database
      */
     public static final ConfigKey<StorageCredentials> DATABASE_VALUES = enduringKey(customKey(c -> {
@@ -457,7 +455,9 @@ public final class ConfigKeys {
     /**
      * The name of the storage method being used
      */
-    public static final ConfigKey<String> STORAGE_METHOD = enduringKey(lowercaseStringKey("storage-method", "h2"));
+    public static final ConfigKey<StorageType> STORAGE_METHOD = enduringKey(customKey(c -> {
+        return StorageType.parse(c.getString("storage-method", "h2"), StorageType.H2);
+    }));
 
     /**
      * If storage files should be monitored for changes
@@ -472,20 +472,20 @@ public final class ConfigKeys {
     /**
      * The options for split storage
      */
-    public static final ConfigKey<Map<SplitStorageType, String>> SPLIT_STORAGE_OPTIONS = enduringKey(customKey(c -> {
-        EnumMap<SplitStorageType, String> map = new EnumMap<>(SplitStorageType.class);
-        map.put(SplitStorageType.USER, c.getString("split-storage.methods.user", "h2").toLowerCase());
-        map.put(SplitStorageType.GROUP, c.getString("split-storage.methods.group", "h2").toLowerCase());
-        map.put(SplitStorageType.TRACK, c.getString("split-storage.methods.track", "h2").toLowerCase());
-        map.put(SplitStorageType.UUID, c.getString("split-storage.methods.uuid", "h2").toLowerCase());
-        map.put(SplitStorageType.LOG, c.getString("split-storage.methods.log", "h2").toLowerCase());
+    public static final ConfigKey<Map<SplitStorageType, StorageType>> SPLIT_STORAGE_OPTIONS = enduringKey(customKey(c -> {
+        EnumMap<SplitStorageType, StorageType> map = new EnumMap<>(SplitStorageType.class);
+        map.put(SplitStorageType.USER, StorageType.parse(c.getString("split-storage.methods.user", "h2"), StorageType.H2));
+        map.put(SplitStorageType.GROUP, StorageType.parse(c.getString("split-storage.methods.group", "h2"), StorageType.H2));
+        map.put(SplitStorageType.TRACK, StorageType.parse(c.getString("split-storage.methods.track", "h2"), StorageType.H2));
+        map.put(SplitStorageType.UUID, StorageType.parse(c.getString("split-storage.methods.uuid", "h2"), StorageType.H2));
+        map.put(SplitStorageType.LOG, StorageType.parse(c.getString("split-storage.methods.log", "h2"), StorageType.H2));
         return ImmutableMap.copyOf(map);
     }));
 
     /**
      * The name of the messaging service in use, or "none" if not enabled
      */
-    public static final ConfigKey<String> MESSAGING_SERVICE = enduringKey(lowercaseStringKey("messaging-service", "none"));
+    public static final ConfigKey<String> MESSAGING_SERVICE = enduringKey(lowercaseStringKey("messaging-service", "auto"));
 
     /**
      * If updates should be automatically pushed by the messaging service
@@ -518,19 +518,24 @@ public final class ConfigKeys {
     public static final ConfigKey<String> REDIS_PASSWORD = enduringKey(stringKey("redis.password", ""));
 
     /**
+     * The URL of the bytebin instance used to upload data
+     */
+    public static final ConfigKey<String> BYTEBIN_URL = stringKey("bytebin-url", "https://bytebin.lucko.me/");
+
+    /**
      * The URL of the web editor
      */
-    public static final ConfigKey<String> WEB_EDITOR_URL_PATTERN = stringKey("web-editor-url", "https://luckperms.github.io/editor/");
+    public static final ConfigKey<String> WEB_EDITOR_URL_PATTERN = stringKey("web-editor-url", "https://editor.luckperms.net/");
 
     /**
      * The URL of the verbose viewer
      */
-    public static final ConfigKey<String> VERBOSE_VIEWER_URL_PATTERN = stringKey("verbose-viewer-url", "https://luckperms.github.io/verbose/");
+    public static final ConfigKey<String> VERBOSE_VIEWER_URL_PATTERN = stringKey("verbose-viewer-url", "https://luckperms.net/verbose/#");
 
     /**
      * The URL of the tree viewer
      */
-    public static final ConfigKey<String> TREE_VIEWER_URL_PATTERN = stringKey("tree-viewer-url", "https://luckperms.github.io/treeview/");
+    public static final ConfigKey<String> TREE_VIEWER_URL_PATTERN = stringKey("tree-viewer-url", "https://luckperms.net/treeview/#");
 
     private static final Map<String, ConfigKey<?>> KEYS;
     private static final int SIZE;
@@ -587,7 +592,5 @@ public final class ConfigKeys {
     public static int size() {
         return SIZE;
     }
-
-    private ConfigKeys() {}
 
 }

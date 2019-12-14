@@ -90,15 +90,15 @@ public class TreeCommand extends SingleCommand {
         }
 
         Message.TREE_UPLOAD_START.send(sender);
-        PermissionCache permissionData = user == null ? null : user.getCachedData().getPermissionData(plugin.getContextForUser(user).orElse(plugin.getContextManager().getStaticContexts()));
-        String id = view.uploadPasteData(sender, user, permissionData);
-        String url = plugin.getConfiguration().get(ConfigKeys.TREE_VIEWER_URL_PATTERN) + "#" + id;
+        PermissionCache permissionData = user == null ? null : user.getCachedData().getPermissionData(plugin.getQueryOptionsForUser(user).orElse(plugin.getContextManager().getStaticQueryOptions()));
+        String id = view.uploadPasteData(plugin.getBytebin(), sender, user, permissionData);
+        String url = plugin.getConfiguration().get(ConfigKeys.TREE_VIEWER_URL_PATTERN) + id;
 
         Message.TREE_URL.send(sender);
 
         Component message = TextComponent.builder(url).color(TextColor.AQUA)
-                .clickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, String.valueOf(url)))
-                .hoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.of("Click to open the tree view.").color(TextColor.GRAY)))
+                .clickEvent(ClickEvent.openUrl(url))
+                .hoverEvent(HoverEvent.showText(TextComponent.of("Click to open the tree view.").color(TextColor.GRAY)))
                 .build();
 
         sender.sendMessage(message);

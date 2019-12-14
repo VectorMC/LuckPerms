@@ -34,6 +34,7 @@ import me.lucko.luckperms.common.storage.misc.StorageCredentials;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -50,8 +51,8 @@ public abstract class HikariConnectionFactory implements ConnectionFactory {
         return null;
     }
 
-    protected void appendProperties(HikariConfig config, StorageCredentials credentials) {
-        for (Map.Entry<String, String> property : credentials.getProperties().entrySet()) {
+    protected void appendProperties(HikariConfig config, Map<String, String> properties) {
+        for (Map.Entry<String, String> property : properties.entrySet()) {
             config.addDataSourceProperty(property.getKey(), property.getValue());
         }
     }
@@ -76,7 +77,7 @@ public abstract class HikariConnectionFactory implements ConnectionFactory {
         config.setPoolName("luckperms-hikari");
 
         appendConfigurationInfo(config);
-        appendProperties(config, this.configuration);
+        appendProperties(config, new HashMap<>(this.configuration.getProperties()));
 
         config.setMaximumPoolSize(this.configuration.getMaxPoolSize());
         config.setMinimumIdle(this.configuration.getMinIdleConnections());
@@ -103,7 +104,7 @@ public abstract class HikariConnectionFactory implements ConnectionFactory {
         boolean success = true;
 
         long start = System.currentTimeMillis();
-        try (Connection c = this.hikari.getConnection()) {
+        try (Connection c = getConnection()) {
             try (Statement s = c.createStatement()) {
                 s.execute("/* ping */ SELECT 1");
             }
@@ -124,9 +125,12 @@ public abstract class HikariConnectionFactory implements ConnectionFactory {
 
     @Override
     public Connection getConnection() throws SQLException {
+        if (this.hikari == null) {
+            throw new SQLException("Unable to get a connection from the pool. (hikari is null)");
+        }
         Connection connection = this.hikari.getConnection();
         if (connection == null) {
-            throw new SQLException("Unable to get a connection from the pool.");
+            throw new SQLException("Unable to get a connection from the pool. (getConnection returned null)");
         }
         return connection;
     }

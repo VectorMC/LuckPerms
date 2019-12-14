@@ -29,12 +29,13 @@ import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.gson.JsonElement;
 
-import me.lucko.luckperms.api.platform.PlatformType;
 import me.lucko.luckperms.common.config.ConfigKeys;
 import me.lucko.luckperms.common.dependencies.relocation.Relocation;
 import me.lucko.luckperms.common.dependencies.relocation.RelocationHandler;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.storage.StorageType;
+
+import net.luckperms.api.platform.Platform;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -74,6 +75,8 @@ public class DependencyRegistry {
         if (this.plugin.getConfiguration().get(ConfigKeys.REDIS_ENABLED)) {
             dependencies.add(Dependency.COMMONS_POOL_2);
             dependencies.add(Dependency.JEDIS);
+            dependencies.add(Dependency.SLF4J_API);
+            dependencies.add(Dependency.SLF4J_SIMPLE);
         }
 
         // don't load slf4j if it's already present
@@ -86,7 +89,7 @@ public class DependencyRegistry {
     }
 
     public void applyRelocationSettings(Dependency dependency, List<Relocation> relocations) {
-        PlatformType type = this.plugin.getBootstrap().getType();
+        Platform.Type type = this.plugin.getBootstrap().getType();
 
         // support for LuckPerms legacy (bukkit 1.7.10)
         if (!RelocationHandler.DEPENDENCIES.contains(dependency) && JsonElement.class.getName().startsWith("me.lucko")) {
@@ -94,13 +97,8 @@ public class DependencyRegistry {
             relocations.add(Relocation.of("gson", "com{}google{}gson"));
         }
 
-        // don't relocate text when running on Velocity
-        if (dependency == Dependency.TEXT && type == PlatformType.VELOCITY) {
-            relocations.remove(Relocation.of("text", "net{}kyori{}text"));
-        }
-
         // relocate yaml within configurate when running velocity
-        if (dependency == Dependency.CONFIGURATE_YAML && type == PlatformType.VELOCITY) {
+        if (dependency == Dependency.CONFIGURATE_YAML && type == Platform.Type.VELOCITY) {
             relocations.add(Relocation.of("yaml", "org{}yaml{}snakeyaml"));
         }
     }

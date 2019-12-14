@@ -32,8 +32,11 @@ import me.lucko.luckperms.common.dependencies.relocation.Relocation;
 import me.lucko.luckperms.common.dependencies.relocation.RelocationHelper;
 
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URLConnection;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
@@ -43,41 +46,62 @@ public enum Dependency {
     ASM(
             "org.ow2.asm",
             "asm",
-            "6.2.1",
-            "FGDbbDPMmchOXLMORrAX5NHMmn+8F0EB1vhIKbtkwIU="
+            "7.1",
+            "SrL6K20sycyx6qBeoynEB7R7E+0pFfYvjEuMyWJY1N4="
     ),
     ASM_COMMONS(
             "org.ow2.asm",
             "asm-commons",
-            "6.2.1",
-            "P1eNMe8w+UttH0SBL0H+T5inzUKvNTNfXUhmqzuQGGU="
+            "7.1",
+            "5VkEidjxmE2Fv+q9Oxc3TFnCiuCdSOxKDrvQGVns01g="
     ),
     JAR_RELOCATOR(
             "me.lucko",
             "jar-relocator",
-            "1.3",
-            "mmz3ltQbS8xXGA2scM0ZH6raISlt4nukjCiU2l9Jxfs="
+            "1.4",
+            "1RsiF3BiVztjlfTA+svDCuoDSGFuSpTZYHvUK8yBx8I="
     ),
 
     TEXT(
             "net{}kyori",
-            "text",
-            "1.11-1.6.4",
-            "V821j+n8AWhAvLhHjfXQ+/4284Gn4oXTYYfLkLjvs8o=",
+            "text-api",
+            "3.0.2",
+            "seZnPElZhfba3XO8/LLUWQHE35kqVM02HpswEVcJqz0=",
+            Relocation.of("text", "net{}kyori{}text")
+    ),
+    TEXT_SERIALIZER_GSON(
+            "net{}kyori",
+            "text-serializer-gson",
+            "3.0.2",
+            "8gJFpnqSHp762TWXn3x5ICLiKg2KgEwEA1FFyOtJ92Y=",
+            Relocation.of("text", "net{}kyori{}text")
+    ),
+    TEXT_SERIALIZER_LEGACY(
+            "net{}kyori",
+            "text-serializer-legacy",
+            "3.0.2",
+            "ks8pZV6ZUHWtwD93Xynyg0KaAMs8CLa61Zb8CaLPsdM=",
             Relocation.of("text", "net{}kyori{}text")
     ),
     TEXT_ADAPTER_BUKKIT(
             "net{}kyori",
             "text-adapter-bukkit",
-            "1.0.1",
-            "WZp7wCp2+EJC+Q/hxGLh/FJJCrn5Zdi2A1z2hX67jAM=",
+            "3.0.2",
+            "VnbfELmOHV6DVidHJql6gmsCjfhABEnF6q9LTezUrQg=",
             Relocation.of("text", "net{}kyori{}text")
     ),
     TEXT_ADAPTER_BUNGEECORD(
             "net{}kyori",
             "text-adapter-bungeecord",
-            "1.0.2",
-            "hj7z8v8AceARfwTPzLzJwZdTqqERN9fPJPhZQAqD1Rc=",
+            "3.0.2",
+            "ZmCmc67danKpZru8rJsDppJZ+f8joquULZI8y/YX4ks=",
+            Relocation.of("text", "net{}kyori{}text")
+    ),
+    TEXT_ADAPTER_SPONGEAPI(
+            "net{}kyori",
+            "text-adapter-spongeapi",
+            "3.0.2",
+            "WPWFw1g8niEGgymV9PdyLADMSL6+UQ7FKdtxnJb79JE=",
             Relocation.of("text", "net{}kyori{}text")
     ),
     EVENT(
@@ -90,46 +114,44 @@ public enum Dependency {
     CAFFEINE(
             "com{}github{}ben-manes{}caffeine",
             "caffeine",
-            "2.6.2",
-            "53pEV3NfB1FY29Ahx2YXl91IVpX8Ttkt/d401HFNl1A=",
+            "2.8.0",
+            "sRB6QJe+RRWpI6Vbxj2gTkEeaWSqBFvs4bx6y4SHLtc=",
             Relocation.of("caffeine", "com{}github{}benmanes{}caffeine")
     ),
     OKIO(
             "com{}squareup{}" + RelocationHelper.OKIO_STRING,
             RelocationHelper.OKIO_STRING,
-            "1.16.0",
-            "7ASE/xkDZA44RcKxCruZ7/LTIwj/40WeX5IwmkUbnH4=",
+            "1.17.4",
+            "14+sWIRY/AmebILpH+XwN1xnQ0YmRRo6d3csZdnu6Fs=",
             Relocation.of(RelocationHelper.OKIO_STRING, RelocationHelper.OKIO_STRING)
     ),
     OKHTTP(
             "com{}squareup{}" + RelocationHelper.OKHTTP3_STRING,
             "okhttp",
-            "3.12.0",
-            "cXh/LFmeBEHHpEE5g7/dk9QLVuG63F4EE9akxIW6PzU=",
-            Relocation.allOf(
-                    Relocation.of(RelocationHelper.OKHTTP3_STRING, RelocationHelper.OKHTTP3_STRING),
-                    Relocation.of(RelocationHelper.OKIO_STRING, RelocationHelper.OKIO_STRING)
-            )
+            "3.14.4",
+            "WMyzdU8VzELfjxaHs7qGMw7ZfH5S5cPoP+ETG4DOPg8=",
+            Relocation.of(RelocationHelper.OKHTTP3_STRING, RelocationHelper.OKHTTP3_STRING),
+            Relocation.of(RelocationHelper.OKIO_STRING, RelocationHelper.OKIO_STRING)
     ),
     COMMODORE(
             "me{}lucko",
             "commodore",
-            "1.2",
-            "KPG1t8vosUNEJy5g7Vq6FGDf8FRslHvhzuZa7A/eIjg=",
+            "1.3",
+            "3+fpQ9eQpO73jm4z7G+6x+q87b8NwjY1KN+nmNGjplk=",
             Relocation.of("commodore", "me{}lucko{}commodore")
     ),
     MARIADB_DRIVER(
             "org{}mariadb{}jdbc",
             "mariadb-java-client",
-            "2.2.6",
-            "TSj72P1Oojmw75SC9Wznfi7xl6YNUjqO48hOuYT8dv4=",
+            "2.5.1",
+            "/AxG0o0JnIme7hnDTO2WEUxgF1yXPiWPhMKermXAzZE=",
             Relocation.of("mariadb", "org{}mariadb{}jdbc")
     ),
     MYSQL_DRIVER(
             "mysql",
             "mysql-connector-java",
-            "5.1.47",
-            "5PhASPOSsrN7r0ao1QjkuN2uKG0gnvmVueEYhSAcGSM=",
+            "5.1.48",
+            "VuJsqqOCH1rkr0T5x09mz4uE6gFRatOAPLsOkEm27Kg=",
             Relocation.of("mysql", "com{}mysql")
     ),
     POSTGRESQL_DRIVER(
@@ -142,64 +164,60 @@ public enum Dependency {
     H2_DRIVER(
             "com.h2database",
             "h2",
-            "1.4.197",
-            "N/UhbhSvJ3KTDf+bhzQ1PwqA6Juj8z4GVEHeZTfF6EI="
+            "1.4.200",
+            "OtmsS2qunNnTrBxEdGXh7QYBm4UbiT3WqNdt222FvKY="
             // we don't apply relocations to h2 - it gets loaded via
             // an isolated classloader
     ),
     SQLITE_DRIVER(
             "org.xerial",
             "sqlite-jdbc",
-            "3.23.1",
-            "1XCvY2or6Z4gvpUQ+2FaqBmyBZhXst1iWuy/93R2YzE="
+            "3.28.0",
+            "k3hOVtv1RiXgbJks+D9w6cG93Vxq0dPwEwjIex2WG2A="
             // we don't apply relocations to sqlite - it gets loaded via
             // an isolated classloader
     ),
     HIKARI(
             "com{}zaxxer",
             "HikariCP",
-            "3.2.0",
-            "sAjeaLvYWBH0tujwhg0JZsastPLnX6vUbsIJRWnL7+s=",
+            "3.4.1",
+            "uCbLTp8iz699ZJS3TxSAf4j9UfrikmgxvTHT0+N/Bck=",
             Relocation.of("hikari", "com{}zaxxer{}hikari")
     ),
     SLF4J_SIMPLE(
             "org.slf4j",
             "slf4j-simple",
-            "1.7.25",
-            "CWbob/+lvlLT2ee4ndZ02YoD7tCkVPuvfBvZSTvZ2HQ="
+            "1.7.28",
+            "YO863GwYR8RuGr16gGIlWqPizh2ywI37H9Q/GkYgdzY="
     ),
     SLF4J_API(
             "org.slf4j",
             "slf4j-api",
-            "1.7.25",
-            "GMSgCV1cHaa4F1kudnuyPSndL1YK1033X/OWHb3iW3k="
+            "1.7.28",
+            "+25PZ6KkaJ4+cTWE2xel0QkMHr5u7DDp4DSabuEYFB4="
     ),
     MONGODB_DRIVER(
             "org.mongodb",
             "mongo-java-driver",
-            "3.8.1",
-            "gIIEEA9QdRUVcI+CVh+w/py0NlLOD+TBNQ/cjNav1p4=",
-            Relocation.allOf(
-                    Relocation.of("mongodb", "com{}mongodb"),
-                    Relocation.of("bson", "org{}bson")
-            )
+            "3.11.1",
+            "tIWEOrQegZK3TT7mNV4ZnjkpW4ViwPiFEpD6yYPyFmE=",
+            Relocation.of("mongodb", "com{}mongodb"),
+            Relocation.of("bson", "org{}bson")
     ),
     JEDIS(
             "redis.clients",
             "jedis",
-            "2.9.0",
-            "HqqWy45QVeTVF0Z/DzsrPLvGKn2dHotqI8YX7GDThvo=",
-            Relocation.allOf(
-                    Relocation.of("jedis", "redis{}clients{}jedis"),
-                    Relocation.of("jedisutil", "redis{}clients{}util"),
-                    Relocation.of("commonspool2", "org{}apache{}commons{}pool2")
-            )
+            "2.10.2",
+            "06PKnEnk08yYpdI2IUAZYxJjp0d6lDp0nGQkWw3CWsU=",
+            Relocation.of("jedis", "redis{}clients{}jedis"),
+            Relocation.of("jedisutil", "redis{}clients{}util"),
+            Relocation.of("commonspool2", "org{}apache{}commons{}pool2")
     ),
     COMMONS_POOL_2(
             "org.apache.commons",
             "commons-pool2",
-            "2.6.0",
-            "kpPYiPvZCVFrhwCkvZHpglS4sf4Vr7bD1jVsnWckut4=",
+            "2.7.0",
+            "a1TGdcc4fhV9KMcJiHPy53LCI8ejW8mxNxc2fJdToeQ=",
             Relocation.of("commonspool2", "org{}apache{}commons{}pool2")
     ),
     CONFIGURATE_CORE(
@@ -226,8 +244,8 @@ public enum Dependency {
     SNAKEYAML(
             "org.yaml",
             "snakeyaml",
-            "1.22",
-            "2rQd+SF15BNbBI4lyB5s//a+4Fv0wo8gAEhYfDKcNJ8=",
+            "1.23",
+            "EwCfte3jzyvlqNDxYCFVrqoM5e9fk2aJK9JY2NPU0rE=",
             Relocation.of("yaml", "org{}yaml{}snakeyaml")
     ),
     CONFIGURATE_HOCON(
@@ -235,10 +253,8 @@ public enum Dependency {
             "configurate-hocon",
             "3.5",
             "sOym1KPmQylGSfk90ZFqobuvoZfEWb7XMmMBwbHuxFw=",
-            Relocation.allOf(
-                    Relocation.of("configurate", "ninja{}leaping{}configurate"),
-                    Relocation.of("hocon", "com{}typesafe{}config")
-            )
+            Relocation.of("configurate", "ninja{}leaping{}configurate"),
+            Relocation.of("hocon", "com{}typesafe{}config")
     ),
     HOCON_CONFIG(
             "com{}typesafe",
@@ -252,10 +268,8 @@ public enum Dependency {
             "configurate-toml",
             "3.5",
             "U8p0XSTaNT/uebvLpO/vb6AhVGQDYiZsauSGB9zolPU=",
-            Relocation.allOf(
-                    Relocation.of("configurate", "ninja{}leaping{}configurate"),
-                    Relocation.of("toml4j", "com{}moandjiezana{}toml")
-            )
+            Relocation.of("configurate", "ninja{}leaping{}configurate"),
+            Relocation.of("toml4j", "com{}moandjiezana{}toml")
     ),
     TOML4J(
             "com{}moandjiezana{}toml",
@@ -265,36 +279,35 @@ public enum Dependency {
             Relocation.of("toml4j", "com{}moandjiezana{}toml")
     );
 
-    private final String url;
+    private final List<URL> urls;
     private final String version;
     private final byte[] checksum;
     private final List<Relocation> relocations;
 
-    private static final String MAVEN_CENTRAL_FORMAT = "https://repo1.maven.org/maven2/%s/%s/%s/%s-%s.jar";
+    private static final String MAVEN_CENTRAL_REPO = "https://repo1.maven.org/maven2/";
+    private static final String LUCK_MIRROR_REPO = "https://nexus.lucko.me/repository/maven-central/";
+    private static final String MAVEN_FORMAT = "%s/%s/%s/%s-%s.jar";
 
     Dependency(String groupId, String artifactId, String version, String checksum) {
-        this(groupId, artifactId, version, checksum, ImmutableList.of());
+        this(groupId, artifactId, version, checksum, new Relocation[0]);
     }
 
-    Dependency(String groupId, String artifactId, String version, String checksum, Relocation relocation) {
-        this(groupId, artifactId, version, checksum, ImmutableList.of(relocation));
-    }
-
-    Dependency(String groupId, String artifactId, String version, String checksum, List<Relocation> relocations) {
-        this(
-                String.format(MAVEN_CENTRAL_FORMAT,
-                        rewriteEscaping(groupId).replace(".", "/"),
-                        rewriteEscaping(artifactId),
-                        version,
-                        rewriteEscaping(artifactId),
-                        version
-                ),
-                version, checksum, relocations
+    Dependency(String groupId, String artifactId, String version, String checksum, Relocation... relocations) {
+        String path = String.format(MAVEN_FORMAT,
+                rewriteEscaping(groupId).replace(".", "/"),
+                rewriteEscaping(artifactId),
+                version,
+                rewriteEscaping(artifactId),
+                version
         );
-    }
-
-    Dependency(String url, String version, String checksum, List<Relocation> relocations) {
-        this.url = url;
+        try {
+            this.urls = ImmutableList.of(
+                    new URL(LUCK_MIRROR_REPO + path),
+                    new URL(MAVEN_CENTRAL_REPO + path)
+            );
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e); // propagate
+        }
         this.version = version;
         this.checksum = Base64.getDecoder().decode(checksum);
         this.relocations = ImmutableList.copyOf(relocations);
@@ -308,26 +321,32 @@ public enum Dependency {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
 
         for (Dependency dependency : values()) {
-            URL url = new URL(dependency.getUrl());
-            try (InputStream in = url.openStream()) {
-                byte[] bytes = ByteStreams.toByteArray(in);
-                if (bytes.length == 0) {
-                    throw new RuntimeException("Empty stream");
+            List<byte[]> hashes = new ArrayList<>();
+            for (URL url : dependency.getUrls()) {
+                URLConnection connection = url.openConnection();
+                connection.setRequestProperty("User-Agent", "luckperms");
+
+                try (InputStream in = connection.getInputStream()) {
+                    byte[] bytes = ByteStreams.toByteArray(in);
+                    if (bytes.length == 0) {
+                        throw new RuntimeException("Empty stream");
+                    }
+
+                    hashes.add(digest.digest(bytes));
                 }
+            }
 
-                byte[] hash = digest.digest(bytes);
-
-                if (Arrays.equals(hash, dependency.getChecksum())) {
-                    System.out.println("MATCH    " + dependency.name() + ": " + Base64.getEncoder().encodeToString(hash));
-                } else {
-                    System.out.println("NO MATCH " + dependency.name() + ": " + Base64.getEncoder().encodeToString(hash));
+            for (int i = 0; i < hashes.size(); i++) {
+                byte[] hash = hashes.get(i);
+                if (!Arrays.equals(hash, dependency.getChecksum())) {
+                    System.out.println("NO MATCH - REPO " + i + " - " + dependency.name() + ": " + Base64.getEncoder().encodeToString(hash));
                 }
             }
         }
     }
 
-    public String getUrl() {
-        return this.url;
+    public List<URL> getUrls() {
+        return this.urls;
     }
 
     public String getVersion() {

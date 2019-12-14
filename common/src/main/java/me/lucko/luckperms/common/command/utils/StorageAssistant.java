@@ -29,6 +29,7 @@ import me.lucko.luckperms.common.config.ConfigKeys;
 import me.lucko.luckperms.common.locale.message.Message;
 import me.lucko.luckperms.common.messaging.InternalMessagingService;
 import me.lucko.luckperms.common.model.Group;
+import me.lucko.luckperms.common.model.HolderType;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.model.Track;
 import me.lucko.luckperms.common.model.User;
@@ -41,6 +42,7 @@ import java.util.Optional;
  * Utility methods for saving users, groups and tracks.
  */
 public final class StorageAssistant {
+    private StorageAssistant() {}
 
     public static Group loadGroup(String target, Sender sender, LuckPermsPlugin plugin, boolean auditTemporary) {
         // special handling for the importer
@@ -68,7 +70,7 @@ public final class StorageAssistant {
         }
 
         if (auditTemporary) {
-            group.auditTemporaryPermissions();
+            group.auditTemporaryNodes();
         }
 
         return group;
@@ -165,10 +167,10 @@ public final class StorageAssistant {
     }
 
     public static void save(PermissionHolder holder, Sender sender, LuckPermsPlugin plugin) {
-        if (holder.getType().isUser()) {
+        if (holder.getType() == HolderType.USER) {
             User user = ((User) holder);
             save(user, sender, plugin);
-        } else if (holder.getType().isGroup()) {
+        } else if (holder.getType() == HolderType.GROUP) {
             Group group = ((Group) holder);
             save(group, sender, plugin);
         } else {
@@ -176,5 +178,4 @@ public final class StorageAssistant {
         }
     }
 
-    private StorageAssistant() {}
 }

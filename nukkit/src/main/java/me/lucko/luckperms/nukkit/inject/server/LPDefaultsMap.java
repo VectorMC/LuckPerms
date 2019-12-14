@@ -28,9 +28,10 @@ package me.lucko.luckperms.nukkit.inject.server;
 import com.google.common.collect.ForwardingMap;
 import com.google.common.collect.ImmutableMap;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.common.buffer.Cache;
+import me.lucko.luckperms.common.cache.Cache;
 import me.lucko.luckperms.nukkit.LPNukkitPlugin;
+
+import net.luckperms.api.util.Tristate;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -88,6 +89,8 @@ public final class LPDefaultsMap {
 
     private void invalidate(boolean op) {
         getCache(op).invalidate();
+        this.plugin.getUserManager().invalidateAllPermissionCalculators();
+        this.plugin.getGroupManager().invalidateAllPermissionCalculators();
     }
 
     /**
@@ -99,7 +102,7 @@ public final class LPDefaultsMap {
      */
     public Tristate lookupDefaultPermission(String permission, boolean isOp) {
         Map<String, Boolean> map = getCache(isOp).get();
-        return Tristate.fromNullableBoolean(map.get(permission));
+        return Tristate.of(map.get(permission));
     }
 
     final class DefaultPermissionSet extends ForwardingMap<String, Permission> {
@@ -135,6 +138,13 @@ public final class LPDefaultsMap {
         public void putAll(@NonNull Map<? extends String, ? extends Permission> map) {
             super.putAll(map);
             invalidate(this.op);
+        }
+
+        @Override
+        public Permission remove(@NonNull Object object) {
+            Permission ret = super.remove(object);
+            invalidate(this.op);
+            return ret;
         }
     }
 

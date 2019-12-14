@@ -27,14 +27,19 @@ package me.lucko.luckperms.nukkit.inject.permissible;
 
 import com.google.common.collect.ImmutableList;
 
-import me.lucko.luckperms.api.Tristate;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 import me.lucko.luckperms.common.config.ConfigKeys;
-import me.lucko.luckperms.common.context.ContextsSupplier;
+import me.lucko.luckperms.common.context.QueryOptionsCache;
 import me.lucko.luckperms.common.model.User;
 import me.lucko.luckperms.common.util.ImmutableCollectors;
 import me.lucko.luckperms.common.verbose.event.PermissionCheckEvent;
 import me.lucko.luckperms.nukkit.LPNukkitPlugin;
+import me.lucko.luckperms.nukkit.calculator.DefaultsProcessor;
+import me.lucko.luckperms.nukkit.context.NukkitContextManager;
 import me.lucko.luckperms.nukkit.inject.PermissionDefault;
+
+import net.luckperms.api.query.QueryOptions;
+import net.luckperms.api.util.Tristate;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -91,7 +96,7 @@ public class LPPermissible extends PermissibleBase {
     private final LPNukkitPlugin plugin;
 
     // caches context lookups for the player
-    private final ContextsSupplier contextsSupplier;
+    private final QueryOptionsCache<Player> queryOptionsSupplier;
 
     // the players previous permissible. (the one they had before this one was injected)
     private PermissibleBase oldPermissible = null;
@@ -108,7 +113,7 @@ public class LPPermissible extends PermissibleBase {
         this.user = Objects.requireNonNull(user, "user");
         this.player = Objects.requireNonNull(player, "player");
         this.plugin = Objects.requireNonNull(plugin, "plugin");
-        this.contextsSupplier = plugin.getContextManager().getCacheFor(player);
+        this.queryOptionsSupplier = plugin.getContextManager().getCacheFor(player);
 
         injectFakeAttachmentsList();
     }
@@ -137,8 +142,13 @@ public class LPPermissible extends PermissibleBase {
             throw new NullPointerException("permission");
         }
 
-        Tristate ts = this.user.getCachedData().getPermissionData(this.contextsSupplier.getContexts()).getPermissionValue(permission, PermissionCheckEvent.Origin.PLATFORM_LOOKUP_CHECK);
-        return ts != Tristate.UNDEFINED || PermissionDefault.OP.getValue(isOp());
+        TristateResult result = this.user.getCachedData().getPermissionData(this.queryOptionsSupplier.getQueryOptions()).checkPermission(permission, PermissionCheckEvent.Origin.PLATFORM_LOOKUP_CHECK);
+        if (result.result() == Tristate.UNDEFINED) {
+            return false;
+        }
+
+        // ignore matches made from looking up in the permission map (replicate nukkit behaviour)
+        return !(result.processorClass() == DefaultsProcessor.class && "permission map".equals(result.cause()));
     }
 
     @Override
@@ -147,17 +157,7 @@ public class LPPermissible extends PermissibleBase {
             throw new NullPointerException("permission");
         }
 
-        Tristate ts = this.user.getCachedData().getPermissionData(this.contextsSupplier.getContexts()).getPermissionValue(permission.getName(), PermissionCheckEvent.Origin.PLATFORM_LOOKUP_CHECK);
-        if (ts != Tristate.UNDEFINED) {
-            return true;
-        }
-
-        if (!this.plugin.getConfiguration().get(ConfigKeys.APPLY_NUKKIT_DEFAULT_PERMISSIONS)) {
-            return PermissionDefault.OP.getValue(isOp());
-        } else {
-            PermissionDefault def = PermissionDefault.fromPermission(permission);
-            return def != null && def.getValue(isOp());
-        }
+        return isPermissionSet(permission.getName());
     }
 
     @Override
@@ -166,8 +166,14 @@ public class LPPermissible extends PermissibleBase {
             throw new NullPointerException("permission");
         }
 
-        Tristate ts = this.user.getCachedData().getPermissionData(this.contextsSupplier.getContexts()).getPermissionValue(permission, PermissionCheckEvent.Origin.PLATFORM_PERMISSION_CHECK);
-        return ts != Tristate.UNDEFINED ? ts.asBoolean() : PermissionDefault.OP.getValue(isOp());
+        QueryOptions queryOptions = this.queryOptionsSupplier.getQueryOptions();
+        Tristate ts = this.user.getCachedData().getPermissionData(queryOptions).checkPermission(permission, PermissionCheckEvent.Origin.PLATFORM_PERMISSION_CHECK).result();
+        if (ts != Tristate.UNDEFINED) {
+            return ts.asBoolean();
+        }
+
+        boolean isOp = queryOptions.option(NukkitContextManager.OP_OPTION).orElse(false);
+        return PermissionDefault.OP.getValue(isOp);
     }
 
     @Override
@@ -176,16 +182,18 @@ public class LPPermissible extends PermissibleBase {
             throw new NullPointerException("permission");
         }
 
-        Tristate ts = this.user.getCachedData().getPermissionData(this.contextsSupplier.getContexts()).getPermissionValue(permission.getName(), PermissionCheckEvent.Origin.PLATFORM_PERMISSION_CHECK);
+        QueryOptions queryOptions = this.queryOptionsSupplier.getQueryOptions();
+        Tristate ts = this.user.getCachedData().getPermissionData(queryOptions).checkPermission(permission.getName(), PermissionCheckEvent.Origin.PLATFORM_PERMISSION_CHECK).result();
         if (ts != Tristate.UNDEFINED) {
             return ts.asBoolean();
         }
 
-        if (!this.plugin.getConfiguration().get(ConfigKeys.APPLY_NUKKIT_DEFAULT_PERMISSIONS)) {
-            return PermissionDefault.OP.getValue(isOp());
-        } else {
+        boolean isOp = queryOptions.option(NukkitContextManager.OP_OPTION).orElse(false);
+        if (this.plugin.getConfiguration().get(ConfigKeys.APPLY_NUKKIT_DEFAULT_PERMISSIONS)) {
             PermissionDefault def = PermissionDefault.fromPermission(permission);
-            return def != null && def.getValue(isOp());
+            return def != null && def.getValue(isOp);
+        } else {
+            return PermissionDefault.OP.getValue(isOp);
         }
     }
 
@@ -207,7 +215,7 @@ public class LPPermissible extends PermissibleBase {
 
     @Override
     public Map<String, PermissionAttachmentInfo> getEffectivePermissions() {
-        return this.user.getCachedData().getPermissionData(this.contextsSupplier.getContexts()).getImmutableBacking().entrySet().stream()
+        return this.user.getCachedData().getPermissionData(this.queryOptionsSupplier.getQueryOptions()).getPermissionMap().entrySet().stream()
                 .collect(ImmutableCollectors.toMap(Map.Entry::getKey, entry -> new PermissionAttachmentInfo(this.player, entry.getKey(), null, entry.getValue())));
     }
 
@@ -282,7 +290,15 @@ public class LPPermissible extends PermissibleBase {
 
     @Override
     public void recalculatePermissions() {
-        // do nothing
+        // this method is called (among other times) when op status is updated.
+        // because we encapsulate op status within QueryOptions, we need to invalidate
+        // the contextmanager cache when op status changes.
+        // (#invalidate is a fast call)
+        if (this.queryOptionsSupplier != null) { // this method is called by the super class constructor, before this class has fully initialised
+            this.queryOptionsSupplier.invalidate();
+        }
+
+        // but we don't need to do anything else in this method, unlike the CB impl.
     }
 
     @Override

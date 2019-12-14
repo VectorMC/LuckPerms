@@ -2,13 +2,6 @@ plugins {
     id 'com.github.johnrengelman.shadow' version '2.0.4'
 }
 
-repositories {
-    maven {
-        name 'spigot-repo'
-        url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
-    }
-}
-
 dependencies {
     compile project(path: ':bukkit', configuration: 'shadow')
     compile 'com.google.code.gson:gson:2.7'
@@ -19,6 +12,7 @@ shadowJar {
     archiveName = "LuckPerms-Bukkit-Legacy-${project.ext.fullVersion}.jar"
 
     dependencies {
+        include(dependency('net.luckperms:.*'))
         include(dependency('me.lucko.luckperms:.*'))
         include(dependency('com.google.guava:guava:.*'))
         include(dependency('com.google.code.gson:gson:.*'))

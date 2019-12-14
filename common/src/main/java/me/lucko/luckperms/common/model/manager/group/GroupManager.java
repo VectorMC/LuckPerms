@@ -25,10 +25,16 @@
 
 package me.lucko.luckperms.common.model.manager.group;
 
+import me.lucko.luckperms.common.calculator.PermissionCalculator;
 import me.lucko.luckperms.common.model.Group;
 import me.lucko.luckperms.common.model.manager.Manager;
 
 public interface GroupManager<T extends Group> extends Manager<String, Group, T> {
+
+    /**
+     * The name of the default group.
+     */
+    String DEFAULT_GROUP_NAME = "default";
 
     /**
      * Get a group object by display name
@@ -42,5 +48,10 @@ public interface GroupManager<T extends Group> extends Manager<String, Group, T>
      * Invalidates the cached data for *loaded* groups.
      */
     void invalidateAllGroupCaches();
+
+    /**
+     * Invalidates the {@link PermissionCalculator}s for *loaded* groups.
+     */
+    void invalidateAllPermissionCalculators();
 
 }

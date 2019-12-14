@@ -25,17 +25,19 @@
 
 package me.lucko.luckperms.sponge.commands;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ContextSet;
 import me.lucko.luckperms.common.command.utils.ArgumentParser;
 import me.lucko.luckperms.common.command.utils.MessageUtils;
 import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.sponge.service.model.LPSubjectReference;
 
+import net.luckperms.api.context.ContextSet;
+import net.luckperms.api.util.Tristate;
+
 import java.util.List;
 import java.util.Map;
 
 public final class SpongeCommandUtils {
+    private SpongeCommandUtils() {}
 
     public static Tristate parseTristate(int index, List<String> args) throws ArgumentParser.ArgumentException {
         String s = args.get(index).toLowerCase();
@@ -89,7 +91,5 @@ public final class SpongeCommandUtils {
     public static String contextToString(ContextSet set, LocaleManager localeManager) {
         return MessageUtils.contextSetToString(localeManager, set);
     }
-
-    private SpongeCommandUtils() {}
 
 }

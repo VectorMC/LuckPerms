@@ -25,30 +25,19 @@
 
 package me.lucko.luckperms.common.command.utils;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.Node;
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ContextSet;
 import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.common.locale.message.Message;
-import me.lucko.luckperms.common.sender.Sender;
+
+import net.luckperms.api.context.Context;
+import net.luckperms.api.context.ContextSet;
+import net.luckperms.api.node.Node;
+import net.luckperms.api.util.Tristate;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 public final class MessageUtils {
-
-    /**
-     * Sends a message to the sender, formatted with the plugin prefix and color scheme
-     *
-     * @param sender the sender to send the message to
-     * @param message the message content
-     */
-    public static void sendPluginMessage(Sender sender, String message) {
-        String prefix = Message.PREFIX.asString(sender.getPlugin().getLocaleManager());
-        sender.sendMessage(Message.colorize(prefix + message));
-    }
+    private MessageUtils() {}
 
     public static String toCommaSep(Collection<String> strings) {
         if (strings.isEmpty()) {
@@ -136,16 +125,9 @@ public final class MessageUtils {
      */
     public static String getAppendableNodeContextString(LocaleManager localeManager, Node node) {
         StringBuilder sb = new StringBuilder();
-        if (node.isServerSpecific()) {
-            sb.append(" ").append(contextToString(localeManager, Contexts.SERVER_KEY, node.getServer().get()));
-        }
-        if (node.isWorldSpecific()) {
-            sb.append(" ").append(contextToString(localeManager, Contexts.WORLD_KEY, node.getWorld().get()));
-        }
-        for (Map.Entry<String, String> c : node.getContexts().toSet()) {
+        for (Context c : node.getContexts()) {
             sb.append(" ").append(contextToString(localeManager, c.getKey(), c.getValue()));
         }
-
         return sb.toString();
     }
 
@@ -169,14 +151,12 @@ public final class MessageUtils {
 
         StringBuilder sb = new StringBuilder();
 
-        for (Map.Entry<String, String> e : set.toSet()) {
+        for (Context e : set) {
             sb.append(Message.CONTEXT_PAIR_INLINE.asString(localeManager, e.getKey(), e.getValue()));
             sb.append(Message.CONTEXT_PAIR_SEP.asString(localeManager));
         }
 
         return sb.delete(sb.length() - Message.CONTEXT_PAIR_SEP.asString(localeManager).length(), sb.length()).toString();
     }
-
-    private MessageUtils() {}
 
 }

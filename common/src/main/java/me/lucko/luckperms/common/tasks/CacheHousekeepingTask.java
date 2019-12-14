@@ -39,10 +39,10 @@ public class CacheHousekeepingTask implements Runnable {
     @Override
     public void run() {
         for (User user : this.plugin.getUserManager().getAll().values()) {
-            user.getCachedData().doCacheCleanup();
+            user.getCachedData().performCacheCleanup();
         }
         for (Group group : this.plugin.getGroupManager().getAll().values()) {
-            group.getCachedData().doCacheCleanup();
+            group.getCachedData().performCacheCleanup();
         }
     }
 }

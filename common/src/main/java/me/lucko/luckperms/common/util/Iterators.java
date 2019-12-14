@@ -32,8 +32,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 public final class Iterators {
+    private Iterators() {}
 
-    public static <I> void iterate(Iterable<I> iterable, Consumer<I> action) {
+    public static <I> void tryIterate(Iterable<I> iterable, Consumer<I> action) {
         for (I i : iterable) {
             try {
                 action.accept(i);
@@ -43,7 +44,7 @@ public final class Iterators {
         }
     }
 
-    public static <I, O> void iterate(Iterable<I> iterable, Function<I, O> mapping, Consumer<O> action) {
+    public static <I, O> void tryIterate(Iterable<I> iterable, Function<I, O> mapping, Consumer<O> action) {
         for (I i : iterable) {
             try {
                 action.accept(mapping.apply(i));
@@ -53,7 +54,7 @@ public final class Iterators {
         }
     }
 
-    public static <I> void iterate(I[] array, Consumer<I> action) {
+    public static <I> void tryIterate(I[] array, Consumer<I> action) {
         for (I i : array) {
             try {
                 action.accept(i);
@@ -63,7 +64,7 @@ public final class Iterators {
         }
     }
 
-    public static <I, O> void iterate(I[] array, Function<I, O> mapping, Consumer<O> action) {
+    public static <I, O> void tryIterate(I[] array, Function<I, O> mapping, Consumer<O> action) {
         for (I i : array) {
             try {
                 action.accept(mapping.apply(i));
@@ -85,7 +86,5 @@ public final class Iterators {
         }
         return lists;
     }
-
-    private Iterators() {}
 
 }

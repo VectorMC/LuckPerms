@@ -5,8 +5,8 @@ plugins {
 dependencies {
     compile project(':common')
 
-    compileOnly 'net.md-5:bungeecord-api:1.12-SNAPSHOT'
-    compileOnly 'net.kyori:text-adapter-bungeecord:1.0.1'
+    compileOnly 'net.md-5:bungeecord-api:1.14-SNAPSHOT'
+    compileOnly 'net.kyori:text-adapter-bungeecord:3.0.2'
     compileOnly 'com.imaginarycode.minecraft:RedisBungee:0.4'
 
     // migration plugins
@@ -32,6 +32,7 @@ shadowJar {
     archiveName = "LuckPerms-Bungee-${project.ext.fullVersion}.jar"
 
     dependencies {
+        include(dependency('net.luckperms:.*'))
         include(dependency('me.lucko.luckperms:.*'))
     }
 

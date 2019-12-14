@@ -25,9 +25,6 @@
 
 package me.lucko.luckperms.bukkit;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.LuckPermsApi;
-import me.lucko.luckperms.api.event.user.UserDataRecalculateEvent;
 import me.lucko.luckperms.bukkit.calculator.BukkitCalculatorFactory;
 import me.lucko.luckperms.bukkit.compat.LuckPermsBrigadier;
 import me.lucko.luckperms.bukkit.context.BukkitContextManager;
@@ -64,6 +61,10 @@ import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.tasks.CacheHousekeepingTask;
 import me.lucko.luckperms.common.tasks.ExpireTemporaryTask;
 
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.event.user.UserDataRecalculateEvent;
+import net.luckperms.api.query.QueryOptions;
+
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
@@ -73,7 +74,6 @@ import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.ServicePriority;
 
 import java.io.File;
-import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -123,7 +123,8 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
 
     @Override
     protected Set<Dependency> getGlobalDependencies() {
-        EnumSet<Dependency> dependencies = EnumSet.of(Dependency.TEXT, Dependency.TEXT_ADAPTER_BUKKIT, Dependency.CAFFEINE, Dependency.OKIO, Dependency.OKHTTP, Dependency.EVENT);
+        Set<Dependency> dependencies = super.getGlobalDependencies();
+        dependencies.add(Dependency.TEXT_ADAPTER_BUKKIT);
         if (isBrigadierSupported()) {
             dependencies.add(Dependency.COMMODORE);
         }
@@ -159,7 +160,9 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
             try {
                 LuckPermsBrigadier.register(this, cmd);
             } catch (Exception e) {
-                e.printStackTrace();
+                if (!(e instanceof RuntimeException && e.getMessage().contains("not supported by the server"))) {
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -189,7 +192,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
                 new InjectorSubscriptionMap(this),
                 new InjectorPermissionMap(this),
                 new InjectorDefaultsMap(this),
-                new PermissibleMonitoringInjector(this)
+                new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.INJECT)
         };
 
         for (Runnable injector : injectors) {
@@ -216,8 +219,8 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
 
         try {
             if (force || this.bootstrap.getServer().getPluginManager().isPluginEnabled("Vault")) {
-                this.vaultHookManager = new VaultHookManager();
-                this.vaultHookManager.hook(this);
+                this.vaultHookManager = new VaultHookManager(this);
+                this.vaultHookManager.hook();
                 getLogger().info("Registered Vault permission & chat hook.");
             }
         } catch (Exception e) {
@@ -228,8 +231,8 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    protected void registerApiOnPlatform(LuckPermsApi api) {
-        this.bootstrap.getServer().getServicesManager().register(LuckPermsApi.class, api, this.bootstrap, ServicePriority.Normal);
+    protected void registerApiOnPlatform(LuckPerms api) {
+        this.bootstrap.getServer().getServicesManager().register(LuckPerms.class, api, this.bootstrap, ServicePriority.Normal);
     }
 
     @Override
@@ -265,7 +268,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
         if (getConfiguration().get(ConfigKeys.AUTO_OP)) {
             getApiProvider().getEventBus().subscribe(UserDataRecalculateEvent.class, event -> {
                 User user = ApiUser.cast(event.getUser());
-                Optional<Player> player = getBootstrap().getPlayer(user.getUuid());
+                Optional<Player> player = getBootstrap().getPlayer(user.getUniqueId());
                 player.ifPresent(p -> refreshAutoOp(p, false));
             });
         }
@@ -297,7 +300,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
         // uninject from players
         for (Player player : this.bootstrap.getServer().getOnlinePlayers()) {
             try {
-                PermissibleInjector.unInject(player, false);
+                PermissibleInjector.uninject(player, false);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -309,7 +312,7 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
             final User user = getUserManager().getIfLoaded(player.getUniqueId());
             if (user != null) {
                 user.getCachedData().invalidate();
-                getUserManager().unload(user);
+                getUserManager().unload(user.getUniqueId());
             }
         }
 
@@ -317,32 +320,33 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
         InjectorSubscriptionMap.uninject();
         InjectorPermissionMap.uninject();
         InjectorDefaultsMap.uninject();
+        new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.UNINJECT).run();
 
         // unhook vault
         if (this.vaultHookManager != null) {
-            this.vaultHookManager.unhook(this);
+            this.vaultHookManager.unhook();
         }
     }
 
     public void refreshAutoOp(Player player, boolean callerIsSync) {
-        if (getConfiguration().get(ConfigKeys.AUTO_OP)) {
-            User user = getUserManager().getIfLoaded(player.getUniqueId());
-            if (user == null) {
-                if (callerIsSync) {
-                    player.setOp(false);
-                } else {
-                    this.bootstrap.getScheduler().executeSync(() -> player.setOp(false));
-                }
-                return;
-            }
+        if (!getConfiguration().get(ConfigKeys.AUTO_OP)) {
+            return;
+        }
 
-            Map<String, Boolean> permData = user.getCachedData().getPermissionData(this.contextManager.getApplicableContexts(player)).getImmutableBacking();
-            boolean value = permData.getOrDefault("luckperms.autoop", false);
-            if (callerIsSync) {
-                player.setOp(value);
-            } else {
-                this.bootstrap.getScheduler().executeSync(() -> player.setOp(value));
-            }
+        User user = getUserManager().getIfLoaded(player.getUniqueId());
+        boolean value;
+
+        if (user != null) {
+            Map<String, Boolean> permData = user.getCachedData().getPermissionData(this.contextManager.getQueryOptions(player)).getPermissionMap();
+            value = permData.getOrDefault("luckperms.autoop", false);
+        } else {
+            value = false;
+        }
+
+        if (callerIsSync) {
+            player.setOp(value);
+        } else {
+            this.bootstrap.getScheduler().executeSync(() -> player.setOp(value));
         }
     }
 
@@ -356,8 +360,8 @@ public class LPBukkitPlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    public Optional<Contexts> getContextForUser(User user) {
-        return this.bootstrap.getPlayer(user.getUuid()).map(player -> this.contextManager.getApplicableContexts(player));
+    public Optional<QueryOptions> getQueryOptionsForUser(User user) {
+        return this.bootstrap.getPlayer(user.getUniqueId()).map(player -> this.contextManager.getQueryOptions(player));
     }
 
     @Override

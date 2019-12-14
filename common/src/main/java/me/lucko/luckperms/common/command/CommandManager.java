@@ -32,7 +32,6 @@ import me.lucko.luckperms.common.command.abstraction.CommandException;
 import me.lucko.luckperms.common.command.access.CommandPermission;
 import me.lucko.luckperms.common.command.tabcomplete.TabCompletions;
 import me.lucko.luckperms.common.command.utils.ArgumentParser;
-import me.lucko.luckperms.common.command.utils.MessageUtils;
 import me.lucko.luckperms.common.commands.group.CreateGroup;
 import me.lucko.luckperms.common.commands.group.DeleteGroup;
 import me.lucko.luckperms.common.commands.group.GroupMainCommand;
@@ -42,7 +41,6 @@ import me.lucko.luckperms.common.commands.migration.MigrationMainCommand;
 import me.lucko.luckperms.common.commands.misc.ApplyEditsCommand;
 import me.lucko.luckperms.common.commands.misc.BulkUpdateCommand;
 import me.lucko.luckperms.common.commands.misc.CheckCommand;
-import me.lucko.luckperms.common.commands.misc.DebugCommand;
 import me.lucko.luckperms.common.commands.misc.EditorCommand;
 import me.lucko.luckperms.common.commands.misc.ExportCommand;
 import me.lucko.luckperms.common.commands.misc.ImportCommand;
@@ -68,6 +66,7 @@ import me.lucko.luckperms.common.util.TextUtils;
 import net.kyori.text.TextComponent;
 import net.kyori.text.event.ClickEvent;
 import net.kyori.text.event.HoverEvent;
+import net.luckperms.api.query.QueryOptions;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -84,9 +83,6 @@ import java.util.stream.Collectors;
 
 public class CommandManager {
     public static final Pattern COMMAND_SEPARATOR_PATTERN = Pattern.compile(" (?=([^\\\"]*\\\"[^\\\"]*\\\")*[^\\\"]*$)");
-
-    public static final char SECTION_CHAR = '\u00A7'; // §
-    public static final char AMPERSAND_CHAR = '&';
 
     private final LuckPermsPlugin plugin;
 
@@ -111,7 +107,6 @@ public class CommandManager {
                 .add(new SyncCommand(locale))
                 .add(new InfoCommand(locale))
                 .add(new EditorCommand(locale))
-                .add(new DebugCommand(locale))
                 .add(new VerboseCommand(locale))
                 .add(new TreeCommand(locale))
                 .add(new SearchCommand(locale))
@@ -167,13 +162,13 @@ public class CommandManager {
 
         // Handle no arguments
         if (arguments.isEmpty() || (arguments.size() == 1 && arguments.get(0).trim().isEmpty())) {
-            MessageUtils.sendPluginMessage(sender, "&2Running &bLuckPerms v" + this.plugin.getBootstrap().getVersion() + "&2.");
+            Message.BLANK.send(sender, "&2Running &bLuckPerms v" + this.plugin.getBootstrap().getVersion() + "&2.");
             if (hasPermissionForAny(sender)) {
                 Message.VIEW_AVAILABLE_COMMANDS_PROMPT.send(sender, label);
                 return CommandResult.SUCCESS;
             } else {
                 Collection<? extends Group> groups = this.plugin.getGroupManager().getAll().values();
-                if (groups.size() <= 1 && groups.stream().allMatch(g -> g.getOwnNodes().isEmpty())) {
+                if (groups.size() <= 1 && groups.stream().allMatch(g -> g.getOwnNodes(QueryOptions.nonContextual()).isEmpty())) {
                     Message.FIRST_TIME_SETUP.send(sender, label, sender.getName());
                 } else {
                     Message.NO_PERMISSION_FOR_SUBCOMMANDS.send(sender);
@@ -271,24 +266,24 @@ public class CommandManager {
     }
 
     private void sendCommandUsage(Sender sender, String label) {
-        MessageUtils.sendPluginMessage(sender, "&2Running &bLuckPerms v" + this.plugin.getBootstrap().getVersion() + "&2.");
+        Message.BLANK.send(sender, "&2Running &bLuckPerms v" + this.plugin.getBootstrap().getVersion() + "&2.");
         this.mainCommands.stream()
                 .filter(Command::shouldDisplay)
                 .filter(c -> c.isAuthorized(sender))
                 .forEach(c -> {
                     String permission = c.getPermission().map(CommandPermission::getPermission).orElse("None");
 
-                    TextComponent component = TextUtils.fromLegacy("&3> &a" + String.format(c.getUsage(), label), AMPERSAND_CHAR)
+                    TextComponent component = TextUtils.fromLegacy("&3> &a" + String.format(c.getUsage(), label), TextUtils.AMPERSAND_CHAR)
                             .toBuilder().applyDeep(comp -> {
-                                comp.hoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextUtils.fromLegacy(TextUtils.joinNewline(
+                                comp.hoverEvent(HoverEvent.showText(TextUtils.fromLegacy(TextUtils.joinNewline(
                                         "&bCommand: &2" + c.getName(),
                                         "&bDescription: &2" + c.getDescription(),
                                         "&bUsage: &2" + String.format(c.getUsage(), label),
                                         "&bPermission: &2" + permission,
                                         " ",
                                         "&7Click to auto-complete."
-                                ), AMPERSAND_CHAR)));
-                                comp.clickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, String.format(c.getUsage(), label)));
+                                ), TextUtils.AMPERSAND_CHAR)));
+                                comp.clickEvent(ClickEvent.suggestCommand(String.format(c.getUsage(), label)));
                             }).build();
                     sender.sendMessage(component);
                 });
@@ -337,7 +332,7 @@ public class CommandManager {
         // Provide aliases
         if (args.size() >= 1 && (rewriteLastArgument || args.size() >= 2)) {
             String arg0 = args.get(0);
-            if (arg0.equalsIgnoreCase("u") || arg0.equalsIgnoreCase("player") || arg0.equalsIgnoreCase("p")) {
+            if (arg0.equalsIgnoreCase("u")) {
                 args.remove(0);
                 args.add(0, "user");
             } else if (arg0.equalsIgnoreCase("g")) {
@@ -362,142 +357,35 @@ public class CommandManager {
                 // Provide aliases
                 case "p":
                 case "perm":
-                case "perms":
                     args.remove(2);
                     args.add(2, "permission");
                     break;
-                case "chat":
                 case "m":
                     args.remove(2);
                     args.add(2, "meta");
                     break;
                 case "i":
-                case "about":
-                case "list":
                     args.remove(2);
                     args.add(2, "info");
-                    break;
-                case "inherit":
-                case "inheritances":
-                case "group":
-                case "groups":
-                case "g":
-                case "rank":
-                case "ranks":
-                case "parents":
-                    args.remove(2);
-                    args.add(2, "parent");
                     break;
                 case "e":
                     args.remove(2);
                     args.add(2, "editor");
                     break;
-
-                // Provide backwards compatibility
-                case "setprimarygroup":
-                case "switchprimarygroup":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "switchprimarygroup");
-                    break;
-                case "listnodes":
-                    args.remove(2);
-                    args.add(2, "permission");
-                    args.add(3, "info");
-                    break;
-                case "set":
-                case "unset":
-                case "settemp":
-                case "unsettemp":
-                    args.add(2, "permission");
-                    break;
-                case "haspermission":
-                    args.remove(2);
-                    args.add(2, "permission");
-                    args.add(3, "check");
-                    break;
-                case "inheritspermission":
-                    args.remove(2);
-                    args.add(2, "permission");
-                    args.add(3, "checkinherits");
-                    break;
-                case "listgroups":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "info");
-                    break;
-                case "addgroup":
-                case "setinherit":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "add");
-                    break;
-                case "setgroup":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "set");
-                    break;
-                case "removegroup":
-                case "unsetinherit":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "remove");
-                    break;
-                case "addtempgroup":
-                case "settempinherit":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "addtemp");
-                    break;
-                case "removetempgroup":
-                case "unsettempinherit":
-                    args.remove(2);
-                    args.add(2, "parent");
-                    args.add(3, "removetemp");
-                    break;
-                case "chatmeta":
-                    args.remove(2);
-                    args.add(2, "meta");
-                    args.add(3, "info");
-                    break;
-                case "addprefix":
-                case "addsuffix":
-                case "removeprefix":
-                case "removesuffix":
-                case "addtempprefix":
-                case "addtempsuffix":
-                case "removetempprefix":
-                case "removetempsuffix":
-                    args.add(2, "meta");
-                    break;
                 default:
                     break;
             }
 
-            // provide lazy info
+            // /lp user Luck permission i ==> /lp user Luck permission info
             boolean lazyInfo = (
                     args.size() >= 4 && (rewriteLastArgument || args.size() >= 5) &&
                     (args.get(2).equalsIgnoreCase("permission") || args.get(2).equalsIgnoreCase("parent") || args.get(2).equalsIgnoreCase("meta")) &&
-                    (args.get(3).equalsIgnoreCase("i") || args.get(3).equalsIgnoreCase("about") || args.get(3).equalsIgnoreCase("list"))
+                    (args.get(3).equalsIgnoreCase("i"))
             );
 
             if (lazyInfo) {
                 args.remove(3);
                 args.add(3, "info");
-            }
-
-            // Provide lazy set rewrite
-            boolean lazySet = (
-                    args.size() >= 6 && (rewriteLastArgument || args.size() >= 7) &&
-                    args.get(2).equalsIgnoreCase("permission") &&
-                    args.get(3).toLowerCase().startsWith("set") &&
-                    (args.get(5).equalsIgnoreCase("none") || args.get(5).equalsIgnoreCase("0"))
-            );
-
-            if (lazySet) {
-                args.remove(5);
-                args.remove(3);
-                args.add(3, "unset");
             }
         }
     }

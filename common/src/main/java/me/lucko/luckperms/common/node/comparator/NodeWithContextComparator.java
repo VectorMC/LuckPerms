@@ -25,8 +25,9 @@
 
 package me.lucko.luckperms.common.node.comparator;
 
-import me.lucko.luckperms.api.Node;
 import me.lucko.luckperms.common.context.ContextSetComparator;
+
+import net.luckperms.api.node.Node;
 
 import java.util.Comparator;
 
@@ -34,6 +35,7 @@ import java.util.Comparator;
  * Compares permission nodes based upon their supposed "priority".
  */
 public class NodeWithContextComparator implements Comparator<Node> {
+    private NodeWithContextComparator() {}
 
     private static final Comparator<? super Node> INSTANCE = new NodeWithContextComparator();
     private static final Comparator<? super Node> REVERSE = INSTANCE.reversed();
@@ -46,22 +48,15 @@ public class NodeWithContextComparator implements Comparator<Node> {
         return REVERSE;
     }
 
-    private NodeWithContextComparator() {}
-
     @Override
     public int compare(Node o1, Node o2) {
         if (o1.equals(o2)) {
             return 0;
         }
 
-        int result = Boolean.compare(o1.isOverride(), o2.isOverride());
-        if (result != 0) {
-            return result;
-        }
-
-        result = ContextSetComparator.normal().compare(
-                o1.getFullContexts().makeImmutable(),
-                o2.getFullContexts().makeImmutable()
+        int result = ContextSetComparator.normal().compare(
+                o1.getContexts(),
+                o2.getContexts()
         );
 
         if (result != 0) {

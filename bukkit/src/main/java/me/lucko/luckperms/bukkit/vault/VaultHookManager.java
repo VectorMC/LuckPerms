@@ -37,28 +37,32 @@ import org.bukkit.plugin.ServicesManager;
  * Handles hooking with the Vault API
  */
 public class VaultHookManager {
-    private VaultChatHook chatHook = null;
-    private VaultPermissionHook permissionHook = null;
+    private final LPBukkitPlugin plugin;
+
+    private LuckPermsVaultChat chat = null;
+    private LuckPermsVaultPermission permission = null;
+
+    public VaultHookManager(LPBukkitPlugin plugin) {
+        this.plugin = plugin;
+    }
 
     /**
      * Registers the LuckPerms implementation of {@link Permission} and {@link Chat} with
      * the service manager.
-     *
-     * @param plugin the plugin
      */
-    public void hook(LPBukkitPlugin plugin) {
+    public void hook() {
         try {
-            if (this.permissionHook == null) {
-                this.permissionHook = new VaultPermissionHook(plugin);
+            if (this.permission == null) {
+                this.permission = new LuckPermsVaultPermission(this.plugin);
             }
 
-            if (this.chatHook == null) {
-                this.chatHook = new VaultChatHook(plugin, this.permissionHook);
+            if (this.chat == null) {
+                this.chat = new LuckPermsVaultChat(this.plugin, this.permission);
             }
 
-            final ServicesManager sm = plugin.getBootstrap().getServer().getServicesManager();
-            sm.register(Permission.class, this.permissionHook, plugin.getBootstrap(), ServicePriority.High);
-            sm.register(Chat.class, this.chatHook, plugin.getBootstrap(), ServicePriority.High);
+            final ServicesManager sm = this.plugin.getBootstrap().getServer().getServicesManager();
+            sm.register(Permission.class, this.permission, this.plugin.getBootstrap(), ServicePriority.High);
+            sm.register(Chat.class, this.chat, this.plugin.getBootstrap(), ServicePriority.High);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -67,20 +71,18 @@ public class VaultHookManager {
 
     /**
      * Unregisters the LuckPerms Vault hooks, if present.
-     *
-     * @param plugin the plugin
      */
-    public void unhook(LPBukkitPlugin plugin) {
-        final ServicesManager sm = plugin.getBootstrap().getServer().getServicesManager();
+    public void unhook() {
+        final ServicesManager sm = this.plugin.getBootstrap().getServer().getServicesManager();
 
-        if (this.permissionHook != null) {
-            sm.unregister(Permission.class, this.permissionHook);
-            this.permissionHook = null;
+        if (this.permission != null) {
+            sm.unregister(Permission.class, this.permission);
+            this.permission = null;
         }
 
-        if (this.chatHook != null) {
-            sm.unregister(Chat.class, this.chatHook);
-            this.chatHook = null;
+        if (this.chat != null) {
+            sm.unregister(Chat.class, this.chat);
+            this.chat = null;
         }
     }
 

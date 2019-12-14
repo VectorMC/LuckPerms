@@ -50,18 +50,39 @@ import java.util.concurrent.TimeUnit;
 public class BukkitConnectionListener extends AbstractConnectionListener implements Listener {
     private final LPBukkitPlugin plugin;
 
+    private final boolean detectedCraftBukkitOfflineMode;
+
     private final Set<UUID> deniedAsyncLogin = Collections.synchronizedSet(new HashSet<>());
     private final Set<UUID> deniedLogin = Collections.synchronizedSet(new HashSet<>());
 
     public BukkitConnectionListener(LPBukkitPlugin plugin) {
         super(plugin);
         this.plugin = plugin;
+
+        // check for craftbukkit + offline mode combination
+        String version = plugin.getBootstrap().getServer().getVersion();
+        boolean onlineMode = plugin.getBootstrap().getServer().getOnlineMode();
+
+        if (!onlineMode && version.startsWith("git-Bukkit-")) {
+            printCraftBukkitOfflineModeError();
+            this.detectedCraftBukkitOfflineMode = true;
+        } else {
+            this.detectedCraftBukkitOfflineMode = false;
+        }
+    }
+
+    private void printCraftBukkitOfflineModeError() {
+        this.plugin.getLogger().warn("It appears that your server is running CraftBukkit and configured in offline (cracked) mode.");
+        this.plugin.getLogger().warn("Due to a CraftBukkit limitation, LuckPerms cannot function correctly in this setup.");
+        this.plugin.getLogger().warn("To resolve this, please either a) upgrade from CraftBukkit to Spigot or Paper, or b) enable online-mode.");
+        this.plugin.getLogger().warn("For more info, please see: https://github.com/lucko/LuckPerms/wiki/Installation#craftbukkit-and-offline-mode");
     }
 
     @EventHandler(priority = EventPriority.LOW)
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent e) {
         /* Called when the player first attempts a connection with the server.
-           Listening on LOW priority to allow plugins to modify username / UUID data here. (auth plugins) */
+           Listening on LOW priority to allow plugins to modify username / UUID data here. (auth plugins)
+           Also, give other plugins a chance to cancel the event. */
 
         /* wait for the plugin to enable. because these events are fired async, they can be called before
            the plugin has enabled.  */
@@ -73,6 +94,13 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
 
         if (this.plugin.getConfiguration().get(ConfigKeys.DEBUG_LOGINS)) {
             this.plugin.getLogger().info("Processing pre-login for " + e.getUniqueId() + " - " + e.getName());
+        }
+
+        if (e.getLoginResult() != AsyncPlayerPreLoginEvent.Result.ALLOWED) {
+            // another plugin has disallowed the login.
+            this.plugin.getLogger().info("Another plugin has cancelled the connection for " + e.getUniqueId() + " - " + e.getName() + ". No permissions data will be loaded.");
+            this.deniedAsyncLogin.add(e.getUniqueId());
+            return;
         }
 
         /* Actually process the login for the connection.
@@ -134,9 +162,17 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
             this.deniedLogin.add(player.getUniqueId());
 
             if (!getUniqueConnections().contains(player.getUniqueId())) {
+
                 this.plugin.getLogger().warn("User " + player.getUniqueId() + " - " + player.getName() +
                         " doesn't have data pre-loaded, they have never been processed during pre-login in this session." +
                         " - denying login.");
+
+                if (this.detectedCraftBukkitOfflineMode) {
+                    printCraftBukkitOfflineModeError();
+                    e.disallow(PlayerLoginEvent.Result.KICK_OTHER, Message.LOADING_STATE_ERROR_CB_OFFLINE_MODE.asString(this.plugin.getLocaleManager()));
+                    return;
+                }
+
             } else {
                 this.plugin.getLogger().warn("User " + player.getUniqueId() + " - " + player.getName() +
                         " doesn't currently have data pre-loaded, but they have been processed before in this session." +
@@ -194,7 +230,7 @@ public class BukkitConnectionListener extends AbstractConnectionListener impleme
         this.plugin.getBootstrap().getServer().getScheduler().runTaskLaterAsynchronously(this.plugin.getBootstrap(), () -> {
             // Remove the custom permissible
             try {
-                PermissibleInjector.unInject(player, true);
+                PermissibleInjector.uninject(player, true);
             } catch (Exception ex) {
                 ex.printStackTrace();
             }

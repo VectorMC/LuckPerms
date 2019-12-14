@@ -25,45 +25,50 @@
 
 package me.lucko.luckperms.common.calculator.processor;
 
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Maps;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.nodetype.types.RegexType;
-import me.lucko.luckperms.common.node.model.NodeTypes;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
+import me.lucko.luckperms.common.node.types.RegexPermission;
+
+import net.luckperms.api.util.Tristate;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 public class RegexProcessor extends AbstractPermissionProcessor implements PermissionProcessor {
-    private Map<Pattern, Boolean> regexPermissions = Collections.emptyMap();
+    private static final TristateResult.Factory RESULT_FACTORY = new TristateResult.Factory(RegexProcessor.class);
+
+    private List<Map.Entry<Pattern, TristateResult>> regexPermissions = Collections.emptyList();
 
     @Override
-    public Tristate hasPermission(String permission) {
-        for (Map.Entry<Pattern, Boolean> e : this.regexPermissions.entrySet()) {
+    public TristateResult hasPermission(String permission) {
+        for (Map.Entry<Pattern, TristateResult> e : this.regexPermissions) {
             if (e.getKey().matcher(permission).matches()) {
-                return Tristate.fromBoolean(e.getValue());
+                return e.getValue();
             }
         }
-
-        return Tristate.UNDEFINED;
+        return TristateResult.UNDEFINED;
     }
 
     @Override
     public void refresh() {
-        ImmutableMap.Builder<Pattern, Boolean> builder = ImmutableMap.builder();
+        ImmutableList.Builder<Map.Entry<Pattern, TristateResult>> builder = ImmutableList.builder();
         for (Map.Entry<String, Boolean> e : this.sourceMap.entrySet()) {
-            RegexType regexType = NodeTypes.parseRegexType(e.getKey());
-            if (regexType == null) {
+            RegexPermission.Builder regexPerm = RegexPermission.parse(e.getKey());
+            if (regexPerm == null) {
                 continue;
             }
 
-            Pattern pattern = regexType.getPattern().orElse(null);
+            Pattern pattern = regexPerm.build().getPattern().orElse(null);
             if (pattern == null) {
                 continue;
             }
 
-            builder.put(pattern, e.getValue());
+            TristateResult value = RESULT_FACTORY.result(Tristate.of(e.getValue()), "pattern: " + pattern.pattern());
+            builder.add(Maps.immutableEntry(pattern, value));
         }
         this.regexPermissions = builder.build();
     }

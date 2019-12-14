@@ -37,6 +37,7 @@ import java.util.function.Function;
 import java.util.stream.Collector;
 
 public final class ImmutableCollectors {
+    private ImmutableCollectors() {}
 
     private static final Collector<Object, ImmutableList.Builder<Object>, ImmutableList<Object>> LIST = Collector.of(
             ImmutableList.Builder::new,
@@ -63,7 +64,6 @@ public final class ImmutableCollectors {
     }
 
     public static <T extends Enum<T>> Collector<T, EnumSet<T>, ImmutableSet<T>> toEnumSet(Class<T> clazz) {
-        //noinspection unchecked
         return Collector.of(
                 () -> EnumSet.noneOf(clazz),
                 EnumSet::add,
@@ -98,7 +98,5 @@ public final class ImmutableCollectors {
                 ImmutableMap::copyOf
         );
     }
-
-    private ImmutableCollectors() {}
 
 }

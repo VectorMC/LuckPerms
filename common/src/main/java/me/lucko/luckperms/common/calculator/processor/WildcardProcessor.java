@@ -27,60 +27,65 @@ package me.lucko.luckperms.common.calculator.processor;
 
 import com.google.common.collect.ImmutableMap;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.common.node.model.ImmutableNode;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
+import me.lucko.luckperms.common.node.AbstractNode;
+
+import net.luckperms.api.util.Tristate;
 
 import java.util.Collections;
 import java.util.Map;
 
 public class WildcardProcessor extends AbstractPermissionProcessor implements PermissionProcessor {
-    public static final String WILDCARD_SUFFIX = ".*";
-    private static final String GLOBAL_WILDCARD = "*";
-    private static final String GLOBAL_WILDCARD_WITH_QUOTES = "'*'";
+    private static final TristateResult.Factory RESULT_FACTORY = new TristateResult.Factory(WildcardProcessor.class);
 
-    private Map<String, Boolean> wildcardPermissions = Collections.emptyMap();
-    private Tristate globalWildcardState = Tristate.UNDEFINED;
+    public static final String WILDCARD_SUFFIX = ".*";
+    private static final String ROOT_WILDCARD = "*";
+    private static final String ROOT_WILDCARD_WITH_QUOTES = "'*'";
+
+    private Map<String, TristateResult> wildcardPermissions = Collections.emptyMap();
+    private TristateResult rootWildcardState = TristateResult.UNDEFINED;
 
     @Override
-    public Tristate hasPermission(String permission) {
+    public TristateResult hasPermission(String permission) {
         String node = permission;
 
         while (true) {
-            int endIndex = node.lastIndexOf(ImmutableNode.NODE_SEPARATOR);
+            int endIndex = node.lastIndexOf(AbstractNode.NODE_SEPARATOR);
             if (endIndex == -1) {
                 break;
             }
 
             node = node.substring(0, endIndex);
             if (!node.isEmpty()) {
-                Tristate t = Tristate.fromNullableBoolean(this.wildcardPermissions.get(node));
-                if (t != Tristate.UNDEFINED) {
-                    return t;
+                TristateResult match = this.wildcardPermissions.get(node);
+                if (match != null && match.result() != Tristate.UNDEFINED) {
+                    return match;
                 }
             }
         }
 
-        return this.globalWildcardState;
+        return this.rootWildcardState;
     }
 
     @Override
     public void refresh() {
-        ImmutableMap.Builder<String, Boolean> builder = ImmutableMap.builder();
+        ImmutableMap.Builder<String, TristateResult> builder = ImmutableMap.builder();
         for (Map.Entry<String, Boolean> e : this.sourceMap.entrySet()) {
             String key = e.getKey();
             if (!key.endsWith(WILDCARD_SUFFIX) || key.length() <= 2) {
                 continue;
             }
+            key = key.substring(0, key.length() - 2);
 
-            builder.put(key.substring(0, key.length() - 2), e.getValue());
+            TristateResult value = RESULT_FACTORY.result(Tristate.of(e.getValue()), "match: " + key);
+            builder.put(key, value);
         }
         this.wildcardPermissions = builder.build();
 
-        Tristate state = Tristate.fromNullableBoolean(this.sourceMap.get(GLOBAL_WILDCARD));
+        Tristate state = Tristate.of(this.sourceMap.get(ROOT_WILDCARD));
         if (state == Tristate.UNDEFINED) {
-            state = Tristate.fromNullableBoolean(this.sourceMap.get(GLOBAL_WILDCARD_WITH_QUOTES));
+            state = Tristate.of(this.sourceMap.get(ROOT_WILDCARD_WITH_QUOTES));
         }
-
-        this.globalWildcardState = state;
+        this.rootWildcardState = RESULT_FACTORY.result(state, "root");
     }
 }

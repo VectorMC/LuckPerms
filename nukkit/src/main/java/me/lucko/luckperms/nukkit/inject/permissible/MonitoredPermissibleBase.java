@@ -25,12 +25,14 @@
 
 package me.lucko.luckperms.nukkit.inject.permissible;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ContextSet;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.verbose.VerboseHandler;
 import me.lucko.luckperms.common.verbose.event.PermissionCheckEvent;
 import me.lucko.luckperms.nukkit.inject.dummy.DummyPermissibleBase;
+
+import net.luckperms.api.query.QueryOptions;
+import net.luckperms.api.util.Tristate;
 
 import cn.nukkit.permission.PermissibleBase;
 import cn.nukkit.permission.Permission;
@@ -47,7 +49,7 @@ import java.util.Map;
  * Method calls are forwarded to the delegate permissible.
  */
 public class MonitoredPermissibleBase extends PermissibleBase {
-    private final LuckPermsPlugin plugin;
+    final LuckPermsPlugin plugin;
     private final PermissibleBase delegate;
     private final String name;
 
@@ -64,14 +66,10 @@ public class MonitoredPermissibleBase extends PermissibleBase {
         this.delegate = delegate;
         this.name = name;
         this.initialised = true;
-
-        // since we effectively cancel the execution of this call in the super
-        // constructor we need to call it again.
-        recalculatePermissions();
     }
 
     private void logCheck(PermissionCheckEvent.Origin origin, String permission, boolean result) {
-        this.plugin.getVerboseHandler().offerPermissionCheckEvent(origin, this.name, ContextSet.empty(), permission, Tristate.fromBoolean(result));
+        this.plugin.getVerboseHandler().offerPermissionCheckEvent(origin, this.name, QueryOptions.defaultContextualOptions(), permission, TristateResult.of(Tristate.of(result)));
         this.plugin.getPermissionRegistry().offer(permission);
     }
 

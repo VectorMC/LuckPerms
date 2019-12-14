@@ -25,16 +25,12 @@
 
 package me.lucko.luckperms.nukkit;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.LuckPermsApi;
-import me.lucko.luckperms.api.event.user.UserDataRecalculateEvent;
 import me.lucko.luckperms.common.api.LuckPermsApiProvider;
 import me.lucko.luckperms.common.api.implementation.ApiUser;
 import me.lucko.luckperms.common.calculator.CalculatorFactory;
 import me.lucko.luckperms.common.command.access.CommandPermission;
 import me.lucko.luckperms.common.config.ConfigKeys;
 import me.lucko.luckperms.common.config.adapter.ConfigurationAdapter;
-import me.lucko.luckperms.common.dependencies.Dependency;
 import me.lucko.luckperms.common.event.AbstractEventBus;
 import me.lucko.luckperms.common.messaging.MessagingFactory;
 import me.lucko.luckperms.common.model.User;
@@ -62,6 +58,10 @@ import me.lucko.luckperms.nukkit.inject.server.LPSubscriptionMap;
 import me.lucko.luckperms.nukkit.listeners.NukkitConnectionListener;
 import me.lucko.luckperms.nukkit.listeners.NukkitPlatformListener;
 
+import net.luckperms.api.LuckPerms;
+import net.luckperms.api.event.user.UserDataRecalculateEvent;
+import net.luckperms.api.query.QueryOptions;
+
 import cn.nukkit.Player;
 import cn.nukkit.command.PluginCommand;
 import cn.nukkit.permission.Permission;
@@ -70,10 +70,8 @@ import cn.nukkit.plugin.service.ServicePriority;
 import cn.nukkit.utils.Config;
 
 import java.io.File;
-import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -106,11 +104,6 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
     @Override
     protected void setupSenderFactory() {
         this.senderFactory = new NukkitSenderFactory(this);
-    }
-
-    @Override
-    protected Set<Dependency> getGlobalDependencies() {
-        return EnumSet.of(Dependency.TEXT, Dependency.CAFFEINE, Dependency.OKIO, Dependency.OKHTTP, Dependency.EVENT);
     }
 
     @Override
@@ -162,7 +155,7 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
                 new InjectorSubscriptionMap(this),
                 new InjectorPermissionMap(this),
                 new InjectorDefaultsMap(this),
-                new PermissibleMonitoringInjector(this)
+                new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.INJECT)
         };
 
         for (Runnable injector : injectors) {
@@ -180,8 +173,8 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    protected void registerApiOnPlatform(LuckPermsApi api) {
-        this.bootstrap.getServer().getServiceManager().register(LuckPermsApi.class, api, this.bootstrap, ServicePriority.NORMAL);
+    protected void registerApiOnPlatform(LuckPerms api) {
+        this.bootstrap.getServer().getServiceManager().register(LuckPerms.class, api, this.bootstrap, ServicePriority.NORMAL);
     }
 
     @Override
@@ -214,7 +207,7 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
         if (getConfiguration().get(ConfigKeys.AUTO_OP)) {
             getApiProvider().getEventBus().subscribe(UserDataRecalculateEvent.class, event -> {
                 User user = ApiUser.cast(event.getUser());
-                Optional<Player> player = getBootstrap().getPlayer(user.getUuid());
+                Optional<Player> player = getBootstrap().getPlayer(user.getUniqueId());
                 player.ifPresent(this::refreshAutoOp);
             });
         }
@@ -246,7 +239,7 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
         // uninject from players
         for (Player player : this.bootstrap.getServer().getOnlinePlayers().values()) {
             try {
-                PermissibleInjector.unInject(player, false);
+                PermissibleInjector.uninject(player, false);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -258,7 +251,7 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
             final User user = getUserManager().getIfLoaded(player.getUniqueId());
             if (user != null) {
                 user.getCachedData().invalidate();
-                getUserManager().unload(user);
+                getUserManager().unload(user.getUniqueId());
             }
         }
 
@@ -266,19 +259,25 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
         InjectorSubscriptionMap.uninject();
         InjectorPermissionMap.uninject();
         InjectorDefaultsMap.uninject();
+        new PermissibleMonitoringInjector(this, PermissibleMonitoringInjector.Mode.UNINJECT).run();
     }
 
     public void refreshAutoOp(Player player) {
-        if (getConfiguration().get(ConfigKeys.AUTO_OP)) {
-            User user = getUserManager().getIfLoaded(player.getUniqueId());
-            if (user == null) {
-                player.setOp(false);
-                return;
-            }
-
-            Map<String, Boolean> permData = user.getCachedData().getPermissionData(this.contextManager.getApplicableContexts(player)).getImmutableBacking();
-            player.setOp(permData.getOrDefault("luckperms.autoop", false));
+        if (!getConfiguration().get(ConfigKeys.AUTO_OP)) {
+            return;
         }
+
+        User user = getUserManager().getIfLoaded(player.getUniqueId());
+        boolean value;
+
+        if (user != null) {
+            Map<String, Boolean> permData = user.getCachedData().getPermissionData(this.contextManager.getQueryOptions(player)).getPermissionMap();
+            value = permData.getOrDefault("luckperms.autoop", false);
+        } else {
+            value = false;
+        }
+
+        player.setOp(value);
     }
 
     private File resolveConfig() {
@@ -291,8 +290,8 @@ public class LPNukkitPlugin extends AbstractLuckPermsPlugin {
     }
 
     @Override
-    public Optional<Contexts> getContextForUser(User user) {
-        return this.bootstrap.getPlayer(user.getUuid()).map(player -> this.contextManager.getApplicableContexts(player));
+    public Optional<QueryOptions> getQueryOptionsForUser(User user) {
+        return this.bootstrap.getPlayer(user.getUniqueId()).map(player -> this.contextManager.getQueryOptions(player));
     }
 
     @Override

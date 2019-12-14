@@ -25,15 +25,20 @@
 
 package me.lucko.luckperms.nukkit.calculator;
 
-import me.lucko.luckperms.api.Tristate;
 import me.lucko.luckperms.common.calculator.processor.PermissionProcessor;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 import me.lucko.luckperms.nukkit.LPNukkitPlugin;
 import me.lucko.luckperms.nukkit.inject.PermissionDefault;
+
+import net.luckperms.api.util.Tristate;
 
 /**
  * Permission Processor for Nukkits "default" permission system.
  */
 public class DefaultsProcessor implements PermissionProcessor {
+    private static final TristateResult.Factory DEFAULT_PERMISSION_MAP_RESULT_FACTORY = new TristateResult.Factory(DefaultsProcessor.class, "default permission map");
+    private static final TristateResult.Factory PERMISSION_MAP_RESULT_FACTORY = new TristateResult.Factory(DefaultsProcessor.class, "permission map");
+
     private final LPNukkitPlugin plugin;
     private final boolean isOp;
 
@@ -43,13 +48,16 @@ public class DefaultsProcessor implements PermissionProcessor {
     }
 
     @Override
-    public Tristate hasPermission(String permission) {
+    public TristateResult hasPermission(String permission) {
         Tristate t = this.plugin.getDefaultPermissionMap().lookupDefaultPermission(permission, this.isOp);
         if (t != Tristate.UNDEFINED) {
-            return t;
+            return DEFAULT_PERMISSION_MAP_RESULT_FACTORY.result(t);
         }
 
         PermissionDefault def = PermissionDefault.fromPermission(this.plugin.getPermissionMap().get(permission));
-        return def == null ? Tristate.UNDEFINED : Tristate.fromBoolean(def.getValue(this.isOp));
+        if (def == null) {
+            return TristateResult.UNDEFINED;
+        }
+        return PERMISSION_MAP_RESULT_FACTORY.result(Tristate.of(def.getValue(this.isOp)));
     }
 }

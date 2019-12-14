@@ -50,7 +50,7 @@ public interface Graph<N> {
      * @return an iterable
      */
     default Iterable<N> traverse(TraversalAlgorithm algorithm, N startNode) {
-        return GraphTraversers.traverseUsing(algorithm, this, startNode);
+        return algorithm.traverse(this, startNode);
     }
 
 }

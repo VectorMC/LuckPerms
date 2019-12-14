@@ -1,7 +1,11 @@
+repositories {
+    maven { url 'https://repo.spongepowered.org/maven' }
+}
+
 dependencies {
     compile project(':common')
 
-    compileOnly('org.spongepowered:spongeapi:7.0.0') {
+    compileOnly('org.spongepowered:spongeapi:7.1.0') {
         exclude(module: 'configurate-core')
         exclude(module: 'configurate-hocon')
         exclude(module: 'configurate-gson')
@@ -10,9 +14,3 @@ dependencies {
     compileOnly 'com.google.guava:guava:21.0'
 }
 
-repositories {
-    maven {
-        name 'sponge-repo'
-        url 'https://repo.spongepowered.org/maven'
-    }
-}

@@ -25,21 +25,25 @@
 
 package me.lucko.luckperms.common.command.access;
 
-import me.lucko.luckperms.api.Contexts;
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ContextSet;
 import me.lucko.luckperms.common.cacheddata.type.PermissionCache;
+import me.lucko.luckperms.common.calculator.processor.MapProcessor;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 import me.lucko.luckperms.common.config.ConfigKeys;
 import me.lucko.luckperms.common.model.Group;
+import me.lucko.luckperms.common.model.HolderType;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.model.Track;
 import me.lucko.luckperms.common.model.User;
-import me.lucko.luckperms.common.node.factory.NodeFactory;
+import me.lucko.luckperms.common.node.types.Inheritance;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.verbose.event.PermissionCheckEvent;
 
-import java.util.Map;
+import net.luckperms.api.context.Context;
+import net.luckperms.api.context.ContextSet;
+import net.luckperms.api.query.QueryOptions;
+import net.luckperms.api.util.Tristate;
+
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -47,6 +51,8 @@ import java.util.function.Function;
  * Implements argument based permission checks for use in command implementations.
  */
 public final class ArgumentPermissions {
+    private ArgumentPermissions() {}
+
     private static final String USER_MODIFY_SELF = CommandPermission.ROOT + "modify.user.self";
     private static final String USER_MODIFY_OTHERS = CommandPermission.ROOT + "modify.user.others";
     private static final Function<String, String> GROUP_MODIFY = s -> CommandPermission.ROOT + "modify.group." + s;
@@ -103,7 +109,7 @@ public final class ArgumentPermissions {
         if (target instanceof User) {
             User targetUser = ((User) target);
             
-            if (targetUser.getUuid().equals(sender.getUuid())) {
+            if (targetUser.getUniqueId().equals(sender.getUniqueId())) {
                 // the sender is trying to edit themselves
                 Tristate ret = sender.getPermissionValue(base.getPermission() + ".modify.self");
                 if (ret != Tristate.UNDEFINED) {
@@ -168,7 +174,7 @@ public final class ArgumentPermissions {
         if (target instanceof User) {
             User targetUser = ((User) target);
 
-            if (targetUser.getUuid().equals(sender.getUuid())) {
+            if (targetUser.getUniqueId().equals(sender.getUniqueId())) {
                 // the sender is trying to view themselves
                 Tristate ret = sender.getPermissionValue(base.getPermission() + ".view.self");
                 if (ret != Tristate.UNDEFINED) {
@@ -241,7 +247,7 @@ public final class ArgumentPermissions {
             }
         }
 
-        for (Map.Entry<String, String> context : contextSet.toSet()) {
+        for (Context context : contextSet) {
             Tristate ret = sender.getPermissionValue(base.getPermission() + ".usecontext." + context.getKey() + "." + context.getValue());
             if (ret != Tristate.UNDEFINED) {
                 if (ret == Tristate.FALSE) {
@@ -269,7 +275,7 @@ public final class ArgumentPermissions {
      * @return true if the sender should NOT be allowed to act, true if they should
      */
     public static boolean checkGroup(LuckPermsPlugin plugin, Sender sender, PermissionHolder holder, ContextSet contextSet) {
-        if (holder.getType().isGroup()) {
+        if (holder.getType() == HolderType.GROUP) {
             return checkGroup(plugin, sender, ((Group) holder).getName(), contextSet);
         }
         return false;
@@ -293,15 +299,14 @@ public final class ArgumentPermissions {
             return false;
         }
 
-        User user = plugin.getUserManager().getIfLoaded(sender.getUuid());
+        User user = plugin.getUserManager().getIfLoaded(sender.getUniqueId());
         if (user == null) {
-            throw new IllegalStateException("Unable to get a User for " + sender.getUuid() + " - " + sender.getName());
+            throw new IllegalStateException("Unable to get a User for " + sender.getUniqueId() + " - " + sender.getName());
         }
 
-        PermissionCache permissionData = user.getCachedData().getPermissionData(Contexts.of(contextSet, Contexts.global().getSettings()));
-        return !permissionData.getPermissionValue(NodeFactory.groupNode(targetGroupName), PermissionCheckEvent.Origin.INTERNAL).asBoolean();
+        PermissionCache permissionData = user.getCachedData().getPermissionData(QueryOptions.defaultContextualOptions().toBuilder().context(contextSet).build());
+        TristateResult result = permissionData.checkPermission(Inheritance.key(targetGroupName), PermissionCheckEvent.Origin.INTERNAL);
+        return result.result() != Tristate.TRUE || result.processorClass() != MapProcessor.class;
     }
-
-    private ArgumentPermissions() {}
     
 }

@@ -25,7 +25,7 @@
 
 package me.lucko.luckperms.common.model;
 
-import me.lucko.luckperms.api.PromotionResult;
+import net.luckperms.api.track.PromotionResult;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 
@@ -36,6 +36,7 @@ import java.util.Optional;
  * Utility class for creating instances of {@link PromotionResult}.
  */
 public final class PromotionResults {
+    private PromotionResults() {}
 
     public static PromotionResult success(String groupFrom, String groupTo) {
         return new Impl(PromotionResult.Status.SUCCESS, groupFrom, groupTo);
@@ -114,8 +115,5 @@ public final class PromotionResults {
                     "groupTo='" + this.groupTo + "')";
         }
     }
-
-
-    private PromotionResults() {}
 
 }

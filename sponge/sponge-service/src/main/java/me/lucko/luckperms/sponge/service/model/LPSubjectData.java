@@ -28,9 +28,9 @@ package me.lucko.luckperms.sponge.service.model;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
-import me.lucko.luckperms.api.Tristate;
-import me.lucko.luckperms.api.context.ImmutableContextSet;
-import me.lucko.luckperms.common.model.NodeMapType;
+import net.luckperms.api.context.ImmutableContextSet;
+import net.luckperms.api.model.data.DataType;
+import net.luckperms.api.util.Tristate;
 
 import org.spongepowered.api.service.permission.SubjectData;
 
@@ -45,15 +45,13 @@ public interface LPSubjectData {
 
     LPSubject getParentSubject();
 
-    NodeMapType getType();
+    DataType getType();
 
     /* permissions */
 
     ImmutableMap<ImmutableContextSet, ImmutableMap<String, Boolean>> getAllPermissions();
 
-    default ImmutableMap<String, Boolean> getPermissions(ImmutableContextSet contexts) {
-        return ImmutableMap.copyOf(getAllPermissions().getOrDefault(contexts, ImmutableMap.of()));
-    }
+    ImmutableMap<String, Boolean> getPermissions(ImmutableContextSet contexts);
 
     CompletableFuture<Boolean> setPermission(ImmutableContextSet contexts, String permission, Tristate value);
 
@@ -65,9 +63,7 @@ public interface LPSubjectData {
 
     ImmutableMap<ImmutableContextSet, ImmutableList<LPSubjectReference>> getAllParents();
 
-    default ImmutableList<LPSubjectReference> getParents(ImmutableContextSet contexts) {
-        return ImmutableList.copyOf(getAllParents().getOrDefault(contexts, ImmutableList.of()));
-    }
+    ImmutableList<LPSubjectReference> getParents(ImmutableContextSet contexts);
 
     CompletableFuture<Boolean> addParent(ImmutableContextSet contexts, LPSubjectReference parent);
 

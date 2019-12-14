@@ -25,37 +25,45 @@
 
 package me.lucko.luckperms.common.model;
 
-import com.google.common.base.Supplier;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
-import com.google.common.collect.SortedSetMultimap;
 
-import me.lucko.luckperms.api.LocalizedNode;
-import me.lucko.luckperms.api.Node;
-import me.lucko.luckperms.api.StandardNodeEquality;
-import me.lucko.luckperms.api.context.ContextSet;
-import me.lucko.luckperms.api.context.ImmutableContextSet;
-import me.lucko.luckperms.common.buffer.Cache;
+import me.lucko.luckperms.common.cache.Cache;
 import me.lucko.luckperms.common.context.ContextSetComparator;
 import me.lucko.luckperms.common.node.comparator.NodeComparator;
 import me.lucko.luckperms.common.node.comparator.NodeWithContextComparator;
-import me.lucko.luckperms.common.node.model.ImmutableLocalizedNode;
+import me.lucko.luckperms.common.node.model.InheritanceOrigin;
+
+import net.luckperms.api.context.ContextSet;
+import net.luckperms.api.context.DefaultContextKeys;
+import net.luckperms.api.context.ImmutableContextSet;
+import net.luckperms.api.node.Node;
+import net.luckperms.api.node.NodeEqualityPredicate;
+import net.luckperms.api.node.metadata.types.InheritanceOriginMetadata;
+import net.luckperms.api.node.types.InheritanceNode;
+import net.luckperms.api.query.Flag;
+import net.luckperms.api.query.QueryOptions;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import java.util.ArrayList;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.function.Function;
 import java.util.function.Predicate;
 
 /**
@@ -68,8 +76,8 @@ import java.util.function.Predicate;
  * <p>Each holder has two of these maps, one for enduring and transient nodes.</p>
  */
 public final class NodeMap {
-    @SuppressWarnings("Guava")
-    private static final Supplier<SortedSet<LocalizedNode>> VALUE_SET_SUPPLIER = () -> new ConcurrentSkipListSet<>(NodeComparator.reverse());
+    private static final Function<ImmutableContextSet, SortedSet<Node>> VALUE_SET_SUPPLIER = k -> new ConcurrentSkipListSet<>(NodeComparator.reverse());
+    private static final Function<ImmutableContextSet, SortedSet<InheritanceNode>> INHERITANCE_VALUE_SET_SUPPLIER = k -> new ConcurrentSkipListSet<>(NodeComparator.reverse());
 
     /**
      * The holder which this map is for
@@ -79,72 +87,94 @@ public final class NodeMap {
     /**
      * The backing data map.
      *
-     * <p>Nodes are mapped by the result of {@link Node#getFullContexts()}, and keys are sorted by the weight of the
+     * <p>Nodes are mapped by the result of {@link Node#getContexts()}, and keys are sorted by the weight of the
      * ContextSet. ContextSets are ordered first by the presence of a server key, then by the presence of a world
      * key, and finally by the overall size of the set. Nodes are ordered according to the priority rules
      * defined in {@link NodeComparator}.</p>
      */
-    private final SortedSetMultimap<ImmutableContextSet, LocalizedNode> map = Multimaps.synchronizedSortedSetMultimap(
-            Multimaps.newSortedSetMultimap(
-                    new ConcurrentSkipListMap<>(ContextSetComparator.reverse()),
-                    VALUE_SET_SUPPLIER
-            )
-    );
+    private final SortedMap<ImmutableContextSet, SortedSet<Node>> map = new ConcurrentSkipListMap<>(ContextSetComparator.reverse());
 
     /**
      * Copy of {@link #map} which only contains group nodes
-     * @see Node#isGroupNode()
+     * @see InheritanceNode
      */
-    private final SortedSetMultimap<ImmutableContextSet, LocalizedNode> inheritanceMap = Multimaps.synchronizedSortedSetMultimap(
-            Multimaps.newSortedSetMultimap(
-                    new ConcurrentSkipListMap<>(ContextSetComparator.reverse()),
-                    VALUE_SET_SUPPLIER
-            )
-    );
+    private final SortedMap<ImmutableContextSet, SortedSet<InheritanceNode>> inheritanceMap = new ConcurrentSkipListMap<>(ContextSetComparator.reverse());
 
     /**
      * A cache which holds an immutable copy of the backing map
      */
-    private final NodeMapCache cache = new NodeMapCache(this);
+    private final ImmutableSetMultimapCache<ImmutableContextSet, Node> mapCache = new ImmutableSetMultimapCache<>(this.map);
+    private final ImmutableSetMultimapCache<ImmutableContextSet, InheritanceNode> inheritanceMapCache = new ImmutableSetMultimapCache<>(this.inheritanceMap);
 
     NodeMap(PermissionHolder holder) {
         this.holder = holder;
     }
 
-    public List<LocalizedNode> asList() {
-        return new ArrayList<>(this.map.values());
+    public LinkedHashSet<Node> asSet() {
+        LinkedHashSet<Node> set = new LinkedHashSet<>();
+        copyTo(set, QueryOptions.nonContextual());
+        return set;
     }
 
-    public LinkedHashSet<LocalizedNode> asSet() {
-        return new LinkedHashSet<>(this.map.values());
-    }
-
-    public SortedSet<LocalizedNode> asSortedSet() {
-        SortedSet<LocalizedNode> ret = new TreeSet<>(NodeWithContextComparator.reverse());
-        copyTo(ret);
+    public SortedSet<Node> asSortedSet() {
+        SortedSet<Node> ret = new TreeSet<>(NodeWithContextComparator.reverse());
+        copyTo(ret, QueryOptions.nonContextual());
         return ret;
     }
 
-    public void copyTo(Collection<? super LocalizedNode> collection) {
-        collection.addAll(this.map.values());
+    public LinkedHashSet<InheritanceNode> inheritanceAsSet() {
+        LinkedHashSet<InheritanceNode> set = new LinkedHashSet<>();
+        copyInheritanceNodesTo(set, QueryOptions.nonContextual());
+        return set;
     }
 
-    public void copyTo(Collection<? super LocalizedNode> collection, ContextSet filter) {
-        for (Map.Entry<ImmutableContextSet, Collection<LocalizedNode>> e : this.map.asMap().entrySet()) {
-            if (e.getKey().isSatisfiedBy(filter)) {
-                collection.addAll(e.getValue());
+    public SortedSet<InheritanceNode> inheritanceAsSortedSet() {
+        SortedSet<InheritanceNode> ret = new TreeSet<>(NodeWithContextComparator.reverse());
+        copyInheritanceNodesTo(ret, QueryOptions.nonContextual());
+        return ret;
+    }
+
+    private static boolean flagExcludeTest(Flag flag, String contextKey, QueryOptions filter, ImmutableContextSet contextSet) {
+        // return true (negative result) if the explicit *include* flag is not set, and if the context set doesn't contain the required context key.
+        return !filter.flag(flag) && !contextSet.containsKey(contextKey);
+    }
+
+    private static boolean normalNodesExcludeTest(QueryOptions filter, ImmutableContextSet contextSet) {
+        // return true (negative result) if normal nodes should not be included due to the lack of a server/world context.
+        return flagExcludeTest(Flag.INCLUDE_NODES_WITHOUT_SERVER_CONTEXT, DefaultContextKeys.SERVER_KEY, filter, contextSet) ||
+                flagExcludeTest(Flag.INCLUDE_NODES_WITHOUT_WORLD_CONTEXT, DefaultContextKeys.WORLD_KEY, filter, contextSet);
+    }
+
+    private static boolean inheritanceNodesIncludeTest(QueryOptions filter, ImmutableContextSet contextSet) {
+        // return true (positive result) if inheritance nodes should be included, due to the lack of any flags preventing their inclusion.
+        return !flagExcludeTest(Flag.APPLY_INHERITANCE_NODES_WITHOUT_SERVER_CONTEXT, DefaultContextKeys.SERVER_KEY, filter, contextSet) &&
+                !flagExcludeTest(Flag.APPLY_INHERITANCE_NODES_WITHOUT_WORLD_CONTEXT, DefaultContextKeys.WORLD_KEY, filter, contextSet);
+    }
+
+    public void copyTo(Collection<? super Node> collection, QueryOptions filter) {
+        for (Map.Entry<ImmutableContextSet, SortedSet<Node>> e : this.map.entrySet()) {
+            if (filter.satisfies(e.getKey())) {
+                if (normalNodesExcludeTest(filter, e.getKey())) {
+                    if (inheritanceNodesIncludeTest(filter, e.getKey())) {
+                        // only copy inheritance nodes.
+                        SortedSet<InheritanceNode> inheritanceNodes = this.inheritanceMap.get(e.getKey());
+                        if (inheritanceNodes != null) {
+                            collection.addAll(inheritanceNodes);
+                        }
+                    }
+                } else {
+                    collection.addAll(e.getValue());
+                }
             }
         }
     }
 
-    public void copyGroupNodesTo(Collection<? super LocalizedNode> collection) {
-        collection.addAll(this.inheritanceMap.values());
-    }
-
-    public void copyGroupNodesTo(Collection<? super LocalizedNode> collection, ContextSet filter) {
-        for (Map.Entry<ImmutableContextSet, Collection<LocalizedNode>> e : this.inheritanceMap.asMap().entrySet()) {
-            if (e.getKey().isSatisfiedBy(filter)) {
-                collection.addAll(e.getValue());
+    public void copyInheritanceNodesTo(Collection<? super InheritanceNode> collection, QueryOptions filter) {
+        for (Map.Entry<ImmutableContextSet, SortedSet<InheritanceNode>> e : this.inheritanceMap.entrySet()) {
+            if (filter.satisfies(e.getKey())) {
+                if (inheritanceNodesIncludeTest(filter, e.getKey())) {
+                    collection.addAll(e.getValue());
+                }
             }
         }
     }
@@ -154,61 +184,75 @@ public final class NodeMap {
      *
      * @return an immutable copy
      */
-    public ImmutableSetMultimap<ImmutableContextSet, LocalizedNode> immutable() {
-        return this.cache.get();
+    public ImmutableSetMultimap<ImmutableContextSet, Node> immutable() {
+        return this.mapCache.get();
+    }
+
+    public ImmutableSetMultimap<ImmutableContextSet, InheritanceNode> immutableInheritance() {
+        return this.inheritanceMapCache.get();
     }
 
     /**
      * Invalidates the cache
      */
     void invalidate() {
-        this.cache.invalidate();
+        this.mapCache.invalidate();
+        this.inheritanceMapCache.invalidate();
     }
 
-    private LocalizedNode localise(Node node) {
-        while (node instanceof LocalizedNode) {
-            LocalizedNode localizedNode = (LocalizedNode) node;
-            if (this.holder.getObjectName().equals(localizedNode.getLocation())) {
-                return localizedNode;
-            } else {
-                node = localizedNode.getNode();
-            }
+    private Node localise(Node node) {
+        Optional<InheritanceOriginMetadata> metadata = node.getMetadata(InheritanceOriginMetadata.KEY);
+        if (metadata.isPresent() && metadata.get().getOrigin().equals(this.holder.getIdentifier())) {
+            return node;
         }
 
-        // localise
-        return ImmutableLocalizedNode.of(node, this.holder.getObjectName());
+        return node.toBuilder().withMetadata(InheritanceOriginMetadata.KEY, new InheritanceOrigin(this.holder.getIdentifier())).build();
     }
 
     void add(Node node) {
-        ImmutableContextSet context = node.getFullContexts().makeImmutable();
-        LocalizedNode n = localise(node);
+        ImmutableContextSet context = node.getContexts();
+        Node n = localise(node);
 
-        SortedSet<LocalizedNode> nodesInContext = this.map.get(context);
-        nodesInContext.removeIf(e -> e.equals(node, StandardNodeEquality.IGNORE_EXPIRY_TIME_AND_VALUE));
+        SortedSet<Node> nodesInContext = this.map.computeIfAbsent(context, VALUE_SET_SUPPLIER);
+        nodesInContext.removeIf(e -> e.equals(node, NodeEqualityPredicate.IGNORE_EXPIRY_TIME_AND_VALUE));
         nodesInContext.add(n);
 
-        if (node.isGroupNode()) {
-            SortedSet<LocalizedNode> groupNodesInContext = this.inheritanceMap.get(context);
-            groupNodesInContext.removeIf(e -> e.equals(node, StandardNodeEquality.IGNORE_EXPIRY_TIME_AND_VALUE));
-            if (node.getValue()) {
-                groupNodesInContext.add(n);
+        if (n instanceof InheritanceNode) {
+            SortedSet<InheritanceNode> inheritanceNodesInContext = this.inheritanceMap.computeIfAbsent(context, INHERITANCE_VALUE_SET_SUPPLIER);
+            inheritanceNodesInContext.removeIf(e -> e.equals(node, NodeEqualityPredicate.IGNORE_EXPIRY_TIME_AND_VALUE));
+            if (n.getValue()) {
+                inheritanceNodesInContext.add((InheritanceNode) n);
             }
         }
     }
 
     void remove(Node node) {
-        ImmutableContextSet context = node.getFullContexts().makeImmutable();
-        this.map.get(context).removeIf(e -> e.equals(node, StandardNodeEquality.IGNORE_EXPIRY_TIME_AND_VALUE));
-        if (node.isGroupNode()) {
-            this.inheritanceMap.get(context).removeIf(e -> e.equals(node, StandardNodeEquality.IGNORE_EXPIRY_TIME_AND_VALUE));
+        ImmutableContextSet context = node.getContexts();
+        SortedSet<Node> nodesInContext = this.map.get(context);
+        if (nodesInContext != null) {
+            nodesInContext.removeIf(e -> e.equals(node, NodeEqualityPredicate.IGNORE_EXPIRY_TIME_AND_VALUE));
+        }
+
+        if (node instanceof InheritanceNode) {
+            SortedSet<InheritanceNode> inheritanceNodesInContext = this.inheritanceMap.get(context);
+            if (inheritanceNodesInContext != null) {
+                inheritanceNodesInContext.removeIf(e -> e.equals(node, NodeEqualityPredicate.IGNORE_EXPIRY_TIME_AND_VALUE));
+            }
         }
     }
 
     private void removeExact(Node node) {
-        ImmutableContextSet context = node.getFullContexts().makeImmutable();
-        this.map.remove(context, node);
-        if (node.isGroupNode() && node.getValue()) {
-            this.inheritanceMap.remove(context, node);
+        ImmutableContextSet context = node.getContexts();
+        SortedSet<Node> nodesInContext = this.map.get(context);
+        if (nodesInContext != null) {
+            nodesInContext.remove(node);
+        }
+
+        if (node instanceof InheritanceNode && node.getValue()) {
+            SortedSet<InheritanceNode> inheritanceNodesInContext = this.inheritanceMap.get(context);
+            if (inheritanceNodesInContext != null) {
+                inheritanceNodesInContext.remove(node);
+            }
         }
     }
 
@@ -223,9 +267,9 @@ public final class NodeMap {
     }
 
     void clear(ContextSet contextSet) {
-        ImmutableContextSet context = contextSet.makeImmutable();
-        this.map.removeAll(context);
-        this.inheritanceMap.removeAll(context);
+        ImmutableContextSet context = contextSet.immutableCopy();
+        this.map.remove(context);
+        this.inheritanceMap.remove(context);
     }
 
     void setContent(Collection<? extends Node> set) {
@@ -240,51 +284,103 @@ public final class NodeMap {
         setContent(multimap.values());
     }
 
-    boolean removeIf(Predicate<? super LocalizedNode> predicate) {
-        boolean ret = this.map.values().removeIf(predicate);
-        this.inheritanceMap.values().removeIf(predicate);
+    boolean removeIf(Predicate<? super Node> predicate) {
+        boolean ret = false;
+        for (SortedSet<Node> valueSet : this.map.values()) {
+            if (valueSet.removeIf(predicate)) {
+                ret = true;
+            }
+        }
+        for (SortedSet<InheritanceNode> valueSet : this.inheritanceMap.values()) {
+            valueSet.removeIf(predicate);
+        }
         return ret;
     }
 
-    boolean removeIf(ContextSet contextSet, Predicate<? super LocalizedNode> predicate) {
-        ImmutableContextSet context = contextSet.makeImmutable();
-        SortedSet<LocalizedNode> nodes = this.map.get(context);
-        boolean ret = nodes.removeIf(predicate);
-        this.inheritanceMap.get(context).removeIf(predicate);
+    boolean removeIf(ContextSet contextSet, Predicate<? super Node> predicate) {
+        ImmutableContextSet context = contextSet.immutableCopy();
+
+        boolean ret = false;
+
+        SortedSet<Node> nodesInContext = this.map.get(context);
+        if (nodesInContext != null) {
+            ret = nodesInContext.removeIf(predicate);
+        }
+
+        SortedSet<InheritanceNode> inheritanceNodesInContext = this.inheritanceMap.get(context);
+        if (inheritanceNodesInContext != null) {
+            inheritanceNodesInContext.removeIf(predicate);
+        }
+
         return ret;
     }
 
-    boolean auditTemporaryNodes(@Nullable Set<? super LocalizedNode> removed) {
+    boolean auditTemporaryNodes(@Nullable Set<? super Node> removed) {
         boolean work = false;
 
-        Iterator<? extends LocalizedNode> it = this.map.values().iterator();
-        while (it.hasNext()) {
-            LocalizedNode entry = it.next();
-            if (entry.hasExpired()) {
+        for (SortedSet<Node> valueSet : this.map.values()) {
+            Iterator<Node> it = valueSet.iterator();
+            while (it.hasNext()) {
+                Node entry = it.next();
+                if (!entry.hasExpired()) {
+                    continue;
+                }
+
+                // remove
                 if (removed != null) {
                     removed.add(entry);
                 }
-                if (entry.isGroupNode() && entry.getValue()) {
-                    this.inheritanceMap.remove(entry.getFullContexts().makeImmutable(), entry);
+                if (entry instanceof InheritanceNode && entry.getValue()) {
+                    SortedSet<InheritanceNode> inheritanceNodesInContext = this.inheritanceMap.get(entry.getContexts());
+                    if (inheritanceNodesInContext != null) {
+                        inheritanceNodesInContext.remove(entry);
+                    }
                 }
-                work = true;
                 it.remove();
+                work = true;
             }
         }
 
         return work;
     }
 
-    private static final class NodeMapCache extends Cache<ImmutableSetMultimap<ImmutableContextSet, LocalizedNode>> {
-        private final NodeMap handle;
+    private static final class ImmutableSetMultimapCache<K, V> extends Cache<ImmutableSetMultimap<K, V>> {
+        private static final Constructor<ImmutableSetMultimap> IMMUTABLE_SET_MULTIMAP_CONSTRUCTOR;
+        static {
+            try {
+                IMMUTABLE_SET_MULTIMAP_CONSTRUCTOR = ImmutableSetMultimap.class.getDeclaredConstructor(ImmutableMap.class, int.class, Comparator.class);
+                IMMUTABLE_SET_MULTIMAP_CONSTRUCTOR.setAccessible(true);
+            } catch (NoSuchMethodException e) {
+                throw new ExceptionInInitializerError(e);
+            }
+        }
 
-        private NodeMapCache(NodeMap handle) {
+        private final Map<K, ? extends Collection<V>> handle;
+
+        private ImmutableSetMultimapCache(Map<K, ? extends Collection<V>> handle) {
             this.handle = handle;
         }
 
         @Override
-        protected @NonNull ImmutableSetMultimap<ImmutableContextSet, LocalizedNode> supply() {
-            return ImmutableSetMultimap.copyOf(this.handle.map);
+        protected @NonNull ImmutableSetMultimap<K, V> supply() {
+            ImmutableMap.Builder<K, ImmutableSet<V>> builder = ImmutableMap.builder();
+            int size = 0;
+
+            for (Map.Entry<K, ? extends Collection<V>> entry : this.handle.entrySet()) {
+                K key = entry.getKey();
+                ImmutableSet<V> values = ImmutableSet.copyOf(entry.getValue());
+                if (!values.isEmpty()) {
+                    builder.put(key, values);
+                    size += values.size();
+                }
+            }
+
+            try {
+                //noinspection unchecked
+                return IMMUTABLE_SET_MULTIMAP_CONSTRUCTOR.newInstance(builder.build(), size, null);
+            } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 

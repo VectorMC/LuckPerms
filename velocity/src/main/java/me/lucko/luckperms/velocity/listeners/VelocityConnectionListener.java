@@ -141,7 +141,7 @@ public class VelocityConnectionListener extends AbstractConnectionListener {
                         return;
                     }
 
-                    player.sendMessage(Message.LOADING_STATE_ERROR.asComponent(this.plugin.getLocaleManager()));
+                    this.plugin.getSenderFactory().wrap(player).sendMessage(Message.LOADING_STATE_ERROR.asComponent(this.plugin.getLocaleManager()));
                 }, 1, TimeUnit.SECONDS);
             }
         }

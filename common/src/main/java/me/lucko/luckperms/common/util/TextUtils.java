@@ -27,14 +27,17 @@ package me.lucko.luckperms.common.util;
 
 import net.kyori.text.Component;
 import net.kyori.text.TextComponent;
-import net.kyori.text.serializer.ComponentSerializers;
+import net.kyori.text.serializer.legacy.LegacyComponentSerializer;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-@SuppressWarnings("deprecation")
 public final class TextUtils {
+    private TextUtils() {}
+
+    public static final char SECTION_CHAR = '\u00A7'; // §
+    public static final char AMPERSAND_CHAR = '&';
 
     public static String joinNewline(String... strings) {
         return joinNewline(Arrays.stream(strings));
@@ -45,19 +48,19 @@ public final class TextUtils {
     }
 
     public static TextComponent fromLegacy(String input, char character) {
-        return ComponentSerializers.LEGACY.deserialize(input, character);
+        return LegacyComponentSerializer.legacy().deserialize(input, character);
     }
 
     public static TextComponent fromLegacy(String input) {
-        return ComponentSerializers.LEGACY.deserialize(input);
+        return LegacyComponentSerializer.legacy().deserialize(input);
     }
 
     public static String toLegacy(Component component, char character) {
-        return ComponentSerializers.LEGACY.serialize(component, character);
+        return LegacyComponentSerializer.legacy().serialize(component, character);
     }
 
     public static String toLegacy(Component component) {
-        return ComponentSerializers.LEGACY.serialize(component);
+        return LegacyComponentSerializer.legacy().serialize(component);
     }
 
     public static String rewritePlaceholders(String input) {
@@ -67,7 +70,5 @@ public final class TextUtils {
         }
         return input;
     }
-
-    private TextUtils() {}
 
 }

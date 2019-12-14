@@ -75,9 +75,9 @@ public class VerboseCommand extends SingleCommand {
 
             String filter = filters.isEmpty() ? "" : String.join(" ", filters);
 
-            VerboseFilter parsedFilter;
+            VerboseFilter compiledFilter;
             try {
-                parsedFilter = VerboseFilter.parse(filter);
+                compiledFilter = new VerboseFilter(filter);
             } catch (InvalidFilterException e) {
                 Message.VERBOSE_INVALID_FILTER.send(sender, filter, e.getCause().getMessage());
                 return CommandResult.FAILURE;
@@ -85,7 +85,7 @@ public class VerboseCommand extends SingleCommand {
 
             boolean notify = !mode.equals("record");
 
-            plugin.getVerboseHandler().registerListener(sender, parsedFilter, notify);
+            plugin.getVerboseHandler().registerListener(sender, compiledFilter, notify);
 
             if (notify) {
                 if (!filter.equals("")) {
@@ -105,21 +105,21 @@ public class VerboseCommand extends SingleCommand {
         }
 
         if (mode.equals("off") || mode.equals("false") || mode.equals("paste") || mode.equals("upload")) {
-            VerboseListener listener = plugin.getVerboseHandler().unregisterListener(sender.getUuid());
+            VerboseListener listener = plugin.getVerboseHandler().unregisterListener(sender.getUniqueId());
 
             if (mode.equals("paste") || mode.equals("upload")) {
                 if (listener == null) {
                     Message.VERBOSE_OFF.send(sender);
                 } else {
                     Message.VERBOSE_UPLOAD_START.send(sender);
-                    String id = listener.uploadPasteData();
-                    String url = plugin.getConfiguration().get(ConfigKeys.VERBOSE_VIEWER_URL_PATTERN) + "#" + id;
+                    String id = listener.uploadPasteData(plugin.getBytebin());
+                    String url = plugin.getConfiguration().get(ConfigKeys.VERBOSE_VIEWER_URL_PATTERN) + id;
 
                     Message.VERBOSE_RESULTS_URL.send(sender);
 
                     Component message = TextComponent.builder(url).color(TextColor.AQUA)
-                            .clickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, String.valueOf(url)))
-                            .hoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextComponent.of("Click to open the results page.").color(TextColor.GRAY)))
+                            .clickEvent(ClickEvent.openUrl(url))
+                            .hoverEvent(HoverEvent.showText(TextComponent.of("Click to open the results page.").color(TextColor.GRAY)))
                             .build();
 
                     sender.sendMessage(message);

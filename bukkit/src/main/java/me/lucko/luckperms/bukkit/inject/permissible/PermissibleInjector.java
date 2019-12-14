@@ -42,6 +42,7 @@ import java.util.List;
  * checks made by plugins.
  */
 public final class PermissibleInjector {
+    private PermissibleInjector() {}
 
     /**
      * All permission checks made on standard Bukkit objects are effectively proxied to a
@@ -120,7 +121,7 @@ public final class PermissibleInjector {
      * @param dummy if the replacement permissible should be a dummy.
      * @throws Exception propagates any exceptions which were thrown during uninjection
      */
-    public static void unInject(Player player, boolean dummy) throws Exception {
+    public static void uninject(Player player, boolean dummy) throws Exception {
 
         // gets the players current permissible.
         PermissibleBase permissible = (PermissibleBase) HUMAN_ENTITY_PERMISSIBLE_FIELD.get(player);
@@ -150,7 +151,5 @@ public final class PermissibleInjector {
             }
         }
     }
-
-    private PermissibleInjector() {}
 
 }

@@ -27,8 +27,6 @@ package me.lucko.luckperms.common.commands.generic.meta;
 
 import com.google.common.collect.Maps;
 
-import me.lucko.luckperms.api.ChatMetaType;
-import me.lucko.luckperms.api.LocalizedNode;
 import me.lucko.luckperms.common.command.CommandResult;
 import me.lucko.luckperms.common.command.abstraction.SharedSubCommand;
 import me.lucko.luckperms.common.command.access.ArgumentPermissions;
@@ -38,18 +36,27 @@ import me.lucko.luckperms.common.locale.LocaleManager;
 import me.lucko.luckperms.common.locale.command.CommandSpec;
 import me.lucko.luckperms.common.locale.message.Message;
 import me.lucko.luckperms.common.model.Group;
+import me.lucko.luckperms.common.model.HolderType;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.node.comparator.NodeWithContextComparator;
-import me.lucko.luckperms.common.node.factory.NodeFactory;
+import me.lucko.luckperms.common.node.factory.NodeCommandFactory;
 import me.lucko.luckperms.common.plugin.LuckPermsPlugin;
 import me.lucko.luckperms.common.sender.Sender;
 import me.lucko.luckperms.common.util.Predicates;
 import me.lucko.luckperms.common.util.TextUtils;
 
-import net.kyori.text.BuildableComponent;
+import net.kyori.text.ComponentBuilder;
 import net.kyori.text.TextComponent;
 import net.kyori.text.event.ClickEvent;
 import net.kyori.text.event.HoverEvent;
+import net.luckperms.api.node.Node;
+import net.luckperms.api.node.NodeType;
+import net.luckperms.api.node.metadata.types.InheritanceOriginMetadata;
+import net.luckperms.api.node.types.ChatMetaNode;
+import net.luckperms.api.node.types.MetaNode;
+import net.luckperms.api.node.types.PrefixNode;
+import net.luckperms.api.node.types.SuffixNode;
+import net.luckperms.api.query.QueryOptions;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -61,8 +68,9 @@ import java.util.TreeSet;
 import java.util.function.Consumer;
 
 public class MetaInfo extends SharedSubCommand {
-    private static String processLocation(LocalizedNode node, PermissionHolder holder) {
-        return node.getLocation().equalsIgnoreCase(holder.getObjectName()) ? "self" : node.getLocation();
+    private static String processLocation(Node node, PermissionHolder holder) {
+        String location = node.metadata(InheritanceOriginMetadata.KEY).getOrigin().getName();
+        return location.equalsIgnoreCase(holder.getObjectName()) ? "self" : location;
     }
 
     public MetaInfo(LocaleManager locale) {
@@ -76,22 +84,24 @@ public class MetaInfo extends SharedSubCommand {
             return CommandResult.NO_PERMISSION;
         }
 
-        SortedSet<Map.Entry<Integer, LocalizedNode>> prefixes = new TreeSet<>(MetaComparator.INSTANCE.reversed());
-        SortedSet<Map.Entry<Integer, LocalizedNode>> suffixes = new TreeSet<>(MetaComparator.INSTANCE.reversed());
-        Set<LocalizedNode> meta = new LinkedHashSet<>();
+        SortedSet<Map.Entry<Integer, PrefixNode>> prefixes = new TreeSet<>(MetaComparator.INSTANCE.reversed());
+        SortedSet<Map.Entry<Integer, SuffixNode>> suffixes = new TreeSet<>(MetaComparator.INSTANCE.reversed());
+        Set<MetaNode> meta = new LinkedHashSet<>();
 
         // Collect data
-        for (LocalizedNode node : holder.resolveInheritances()) {
-            if (!node.isSuffix() && !node.isPrefix() && !node.isMeta()) {
+        for (Node node : holder.resolveInheritedNodes(QueryOptions.nonContextual())) {
+            if (!NodeType.META_OR_CHAT_META.matches(node)) {
                 continue;
             }
 
-            if (node.isPrefix()) {
-                prefixes.add(Maps.immutableEntry(node.getPrefix().getKey(), node));
-            } else if (node.isSuffix()) {
-                suffixes.add(Maps.immutableEntry(node.getSuffix().getKey(), node));
-            } else if (node.isMeta()) {
-                meta.add(node);
+            if (node instanceof PrefixNode) {
+                PrefixNode pn = (PrefixNode) node;
+                prefixes.add(Maps.immutableEntry(pn.getPriority(), pn));
+            } else if (node instanceof SuffixNode) {
+                SuffixNode sn = (SuffixNode) node;
+                suffixes.add(Maps.immutableEntry(sn.getPriority(), sn));
+            } else if (node instanceof MetaNode) {
+                meta.add(((MetaNode) node));
             }
         }
 
@@ -99,14 +109,14 @@ public class MetaInfo extends SharedSubCommand {
             Message.CHAT_META_PREFIX_NONE.send(sender, holder.getFormattedDisplayName());
         } else {
             Message.CHAT_META_PREFIX_HEADER.send(sender, holder.getFormattedDisplayName());
-            sendChatMetaMessage(ChatMetaType.PREFIX, prefixes, sender, holder, label);
+            sendChatMetaMessage(prefixes, sender, holder, label);
         }
 
         if (suffixes.isEmpty()) {
             Message.CHAT_META_SUFFIX_NONE.send(sender, holder.getFormattedDisplayName());
         } else {
             Message.CHAT_META_SUFFIX_HEADER.send(sender, holder.getFormattedDisplayName());
-            sendChatMetaMessage(ChatMetaType.SUFFIX, suffixes, sender, holder, label);
+            sendChatMetaMessage(suffixes, sender, holder, label);
         }
 
         if (meta.isEmpty()) {
@@ -119,55 +129,58 @@ public class MetaInfo extends SharedSubCommand {
         return CommandResult.SUCCESS;
     }
 
-    private static void sendMetaMessage(Set<LocalizedNode> meta, Sender sender, PermissionHolder holder, String label) {
-        for (LocalizedNode m : meta) {
+    private static void sendMetaMessage(Set<MetaNode> meta, Sender sender, PermissionHolder holder, String label) {
+        for (MetaNode m : meta) {
             String location = processLocation(m, holder);
-            if (m.hasSpecificContext()) {
+            if (!m.getContexts().isEmpty()) {
                 String context = MessageUtils.getAppendableNodeContextString(sender.getPlugin().getLocaleManager(), m);
-                TextComponent.Builder builder = Message.META_ENTRY_WITH_CONTEXT.asComponent(sender.getPlugin().getLocaleManager(), m.getMeta().getKey(), m.getMeta().getValue(), location, context).toBuilder();
+                TextComponent.Builder builder = Message.META_ENTRY_WITH_CONTEXT.asComponent(sender.getPlugin().getLocaleManager(), m.getMetaKey(), m.getMetaValue(), location, context).toBuilder();
                 builder.applyDeep(makeFancy(holder, label, m));
                 sender.sendMessage(builder.build());
             } else {
-                TextComponent.Builder builder = Message.META_ENTRY.asComponent(sender.getPlugin().getLocaleManager(), m.getMeta().getKey(), m.getMeta().getValue(), location).toBuilder();
+                TextComponent.Builder builder = Message.META_ENTRY.asComponent(sender.getPlugin().getLocaleManager(), m.getMetaKey(), m.getMetaValue(), location).toBuilder();
                 builder.applyDeep(makeFancy(holder, label, m));
                 sender.sendMessage(builder.build());
             }
         }
     }
 
-    private static void sendChatMetaMessage(ChatMetaType type, SortedSet<Map.Entry<Integer, LocalizedNode>> meta, Sender sender, PermissionHolder holder, String label) {
-        for (Map.Entry<Integer, LocalizedNode> e : meta) {
+    private static void sendChatMetaMessage(SortedSet<? extends Map.Entry<Integer, ? extends ChatMetaNode<?, ?>>> meta, Sender sender, PermissionHolder holder, String label) {
+        for (Map.Entry<Integer, ? extends ChatMetaNode<?, ?>> e : meta) {
             String location = processLocation(e.getValue(), holder);
-            if (e.getValue().hasSpecificContext()) {
+            if (!e.getValue().getContexts().isEmpty()) {
                 String context = MessageUtils.getAppendableNodeContextString(sender.getPlugin().getLocaleManager(), e.getValue());
-                TextComponent.Builder builder = Message.CHAT_META_ENTRY_WITH_CONTEXT.asComponent(sender.getPlugin().getLocaleManager(), e.getKey(), type.getEntry(e.getValue()).getValue(), location, context).toBuilder();
-                builder.applyDeep(makeFancy(type, holder, label, e.getValue()));
+                TextComponent.Builder builder = Message.CHAT_META_ENTRY_WITH_CONTEXT.asComponent(sender.getPlugin().getLocaleManager(), e.getKey(), e.getValue().getMetaValue(), location, context).toBuilder();
+                builder.applyDeep(makeFancy(holder, label, e.getValue()));
                 sender.sendMessage(builder.build());
             } else {
-                TextComponent.Builder builder = Message.CHAT_META_ENTRY.asComponent(sender.getPlugin().getLocaleManager(), e.getKey(), type.getEntry(e.getValue()).getValue(), location).toBuilder();
-                builder.applyDeep(makeFancy(type, holder, label, e.getValue()));
+                TextComponent.Builder builder = Message.CHAT_META_ENTRY.asComponent(sender.getPlugin().getLocaleManager(), e.getKey(), e.getValue().getMetaValue(), location).toBuilder();
+                builder.applyDeep(makeFancy(holder, label, e.getValue()));
                 sender.sendMessage(builder.build());
             }
         }
     }
 
-    private static Consumer<BuildableComponent.Builder<?, ?>> makeFancy(ChatMetaType type, PermissionHolder holder, String label, LocalizedNode node) {
-        if (!node.getLocation().equals(holder.getObjectName())) {
+    private static Consumer<ComponentBuilder<?, ?>> makeFancy(PermissionHolder holder, String label, ChatMetaNode<?, ?> node) {
+        String location = node.metadata(InheritanceOriginMetadata.KEY).getOrigin().getName();
+        if (!location.equals(holder.getObjectName())) {
             // inherited.
-            Group group = holder.getPlugin().getGroupManager().getIfLoaded(node.getLocation());
+            Group group = holder.getPlugin().getGroupManager().getIfLoaded(location);
             if (group != null) {
                 holder = group;
             }
         }
 
-        HoverEvent hoverEvent = new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextUtils.fromLegacy(TextUtils.joinNewline(
-                "¥3> ¥a" + type.getEntry(node).getKey() + " ¥7- ¥r" + type.getEntry(node).getValue(),
+        HoverEvent hoverEvent = HoverEvent.showText(TextUtils.fromLegacy(TextUtils.joinNewline(
+                "¥3> ¥a" + node.getPriority() + " ¥7- ¥r" + node.getMetaValue(),
                 " ",
-                "¥7Click to remove this " + type.name().toLowerCase() + " from " + holder.getFormattedDisplayName()
+                "¥7Click to remove this " + node.getMetaType().name().toLowerCase() + " from " + holder.getPlainDisplayName()
         ), '¥'));
 
-        String command = "/" + label + " " + NodeFactory.nodeAsCommand(node, holder.getType().isGroup() ? holder.getObjectName() : holder.getFormattedDisplayName(), holder.getType(), false, !holder.getPlugin().getConfiguration().getContextsFile().getDefaultContexts().isEmpty());
-        ClickEvent clickEvent = new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command);
+        String id = holder.getType() == HolderType.GROUP ? holder.getObjectName() : holder.getFormattedDisplayName();
+        boolean explicitGlobalContext = !holder.getPlugin().getConfiguration().getContextsFile().getDefaultContexts().isEmpty();
+        String command = "/" + label + " " + NodeCommandFactory.generateCommand(node, id, holder.getType(), false, explicitGlobalContext);
+        ClickEvent clickEvent = ClickEvent.suggestCommand(command);
 
         return component -> {
             component.hoverEvent(hoverEvent);
@@ -175,23 +188,26 @@ public class MetaInfo extends SharedSubCommand {
         };
     }
 
-    private static Consumer<BuildableComponent.Builder<?, ?>> makeFancy(PermissionHolder holder, String label, LocalizedNode node) {
-        if (!node.getLocation().equals(holder.getObjectName())) {
+    private static Consumer<ComponentBuilder<?, ?>> makeFancy(PermissionHolder holder, String label, MetaNode node) {
+        String location = node.metadata(InheritanceOriginMetadata.KEY).getOrigin().getName();
+        if (!location.equals(holder.getObjectName())) {
             // inherited.
-            Group group = holder.getPlugin().getGroupManager().getIfLoaded(node.getLocation());
+            Group group = holder.getPlugin().getGroupManager().getIfLoaded(location);
             if (group != null) {
                 holder = group;
             }
         }
 
-        HoverEvent hoverEvent = new HoverEvent(HoverEvent.Action.SHOW_TEXT, TextUtils.fromLegacy(TextUtils.joinNewline(
-                "¥3> ¥r" + node.getMeta().getKey() + " ¥7- ¥r" + node.getMeta().getValue(),
+        HoverEvent hoverEvent = HoverEvent.showText(TextUtils.fromLegacy(TextUtils.joinNewline(
+                "¥3> ¥r" + node.getMetaKey() + " ¥7- ¥r" + node.getMetaValue(),
                 " ",
-                "¥7Click to remove this meta pair from " + holder.getFormattedDisplayName()
+                "¥7Click to remove this meta pair from " + holder.getPlainDisplayName()
         ), '¥'));
 
-        String command = "/" + label + " " + NodeFactory.nodeAsCommand(node, holder.getType().isGroup() ? holder.getObjectName() : holder.getFormattedDisplayName(), holder.getType(), false, !holder.getPlugin().getConfiguration().getContextsFile().getDefaultContexts().isEmpty());
-        ClickEvent clickEvent = new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, command);
+        String id = holder.getType() == HolderType.GROUP ? holder.getObjectName() : holder.getPlainDisplayName();
+        boolean explicitGlobalContext = !holder.getPlugin().getConfiguration().getContextsFile().getDefaultContexts().isEmpty();
+        String command = "/" + label + " " + NodeCommandFactory.generateCommand(node, id, holder.getType(), false, explicitGlobalContext);
+        ClickEvent clickEvent = ClickEvent.suggestCommand(command);
 
         return component -> {
             component.hoverEvent(hoverEvent);
@@ -199,11 +215,11 @@ public class MetaInfo extends SharedSubCommand {
         };
     }
 
-    private static final class MetaComparator implements Comparator<Map.Entry<Integer, LocalizedNode>> {
+    private static final class MetaComparator implements Comparator<Map.Entry<Integer, ? extends ChatMetaNode<?, ?>>> {
         public static final MetaComparator INSTANCE = new MetaComparator();
 
         @Override
-        public int compare(Map.Entry<Integer, LocalizedNode> o1, Map.Entry<Integer, LocalizedNode> o2) {
+        public int compare(Map.Entry<Integer, ? extends ChatMetaNode<?, ?>> o1, Map.Entry<Integer, ? extends ChatMetaNode<?, ?>> o2) {
             int result = Integer.compare(o1.getKey(), o2.getKey());
             if (result != 0) {
                 return result;

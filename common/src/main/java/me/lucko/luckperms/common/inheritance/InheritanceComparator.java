@@ -26,21 +26,22 @@
 package me.lucko.luckperms.common.inheritance;
 
 import me.lucko.luckperms.common.model.Group;
+import me.lucko.luckperms.common.model.HolderType;
 import me.lucko.luckperms.common.model.PermissionHolder;
 import me.lucko.luckperms.common.model.User;
-import me.lucko.luckperms.common.node.factory.NodeFactory;
+import me.lucko.luckperms.common.model.manager.group.GroupManager;
 
 import java.util.Comparator;
 
 /**
  * Determines the order of group inheritance in {@link PermissionHolder}.
  */
-public class InheritanceComparator implements Comparator<Group> {
-    private static final Comparator<Group> NULL_ORIGIN = new InheritanceComparator(null);
+public class InheritanceComparator implements Comparator<PermissionHolder> {
+    private static final Comparator<PermissionHolder> NULL_ORIGIN = new InheritanceComparator(null).reversed();
 
-    public static Comparator<Group> getFor(PermissionHolder origin) {
-        if (origin.getType().isUser()) {
-            return new InheritanceComparator(((User) origin));
+    public static Comparator<? super PermissionHolder> getFor(PermissionHolder origin) {
+        if (origin.getType() == HolderType.USER) {
+            return new InheritanceComparator(((User) origin)).reversed();
         }
         return NULL_ORIGIN;
     }
@@ -52,27 +53,38 @@ public class InheritanceComparator implements Comparator<Group> {
     }
 
     @Override
-    public int compare(Group o1, Group o2) {
+    public int compare(PermissionHolder o1, PermissionHolder o2) {
+        // if both users, return 0
+        // if one or the other is a user, give a higher priority to the user
+        boolean o1IsUser = o1.getType() == HolderType.USER;
+        boolean o2IsUser = o2.getType() == HolderType.USER;
+        if (o1IsUser && o2IsUser) {
+            return 0;
+        } else if (o1IsUser) {
+            return 1;
+        } else if (o2IsUser) {
+            return -1;
+        }
+
+        Group o1Group = (Group) o1;
+        Group o2Group = (Group) o2;
+
         int result = Integer.compare(o1.getWeight().orElse(0), o2.getWeight().orElse(0));
         if (result != 0) {
-            // note negated value - we want higher weights first!
-            return -result;
+            return result;
         }
 
         // failing differing group weights, check if one of the groups is a primary group
         if (this.origin != null) {
-            // note negative
-            result = -Boolean.compare(
-                    o1.getName().equalsIgnoreCase(this.origin.getPrimaryGroup().getStoredValue().orElse(NodeFactory.DEFAULT_GROUP_NAME)),
-                    o2.getName().equalsIgnoreCase(this.origin.getPrimaryGroup().getStoredValue().orElse(NodeFactory.DEFAULT_GROUP_NAME))
+            return Boolean.compare(
+                    o1Group.getName().equalsIgnoreCase(this.origin.getPrimaryGroup().getStoredValue().orElse(GroupManager.DEFAULT_GROUP_NAME)),
+                    o2Group.getName().equalsIgnoreCase(this.origin.getPrimaryGroup().getStoredValue().orElse(GroupManager.DEFAULT_GROUP_NAME))
             );
-
-            if (result != 0) {
-                return result;
-            }
         }
 
-        // fallback to string based comparison
-        return o1.getName().compareTo(o2.getName());
+        // failing weight/primary group checks, fallback to the node ordering
+        // this comparator is only ever used by Collections.sort - which is stable. the existing
+        // ordering of the nodes will therefore apply.
+        return 0;
     }
 }
