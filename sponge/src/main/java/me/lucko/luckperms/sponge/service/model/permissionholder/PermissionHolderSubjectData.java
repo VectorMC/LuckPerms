@@ -65,7 +65,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
-import java.util.stream.Stream;
 
 public class PermissionHolderSubjectData implements LPSubjectData {
     private final LuckPermsService service;
@@ -79,10 +78,6 @@ public class PermissionHolderSubjectData implements LPSubjectData {
         this.service = service;
         this.holder = holder;
         this.parentSubject = parentSubject;
-    }
-
-    private Stream<? extends Node> streamNodes() {
-        return this.holder.getData(this.type).immutable().values().stream();
     }
 
     @Override
@@ -102,15 +97,15 @@ public class PermissionHolderSubjectData implements LPSubjectData {
 
     @Override
     public ImmutableMap<ImmutableContextSet, ImmutableMap<String, Boolean>> getAllPermissions() {
-        ImmutableMap.Builder<ImmutableContextSet, ImmutableMap<String, Boolean>> ret = ImmutableMap.builder();
+        ImmutableMap.Builder<ImmutableContextSet, ImmutableMap<String, Boolean>> permissions = ImmutableMap.builder();
         for (Map.Entry<ImmutableContextSet, ? extends Collection<? extends Node>> entry : this.holder.getData(this.type).immutable().asMap().entrySet()) {
             ImmutableMap.Builder<String, Boolean> builder = ImmutableMap.builder();
             for (Node n : entry.getValue()) {
                 builder.put(n.getKey(), n.getValue());
             }
-            ret.put(entry.getKey(), builder.build());
+            permissions.put(entry.getKey(), builder.build());
         }
-        return ret.build();
+        return permissions.build();
     }
 
     @Override
@@ -163,15 +158,15 @@ public class PermissionHolderSubjectData implements LPSubjectData {
 
     @Override
     public ImmutableMap<ImmutableContextSet, ImmutableList<LPSubjectReference>> getAllParents() {
-        ImmutableMap.Builder<ImmutableContextSet, ImmutableList<LPSubjectReference>> ret = ImmutableMap.builder();
+        ImmutableMap.Builder<ImmutableContextSet, ImmutableList<LPSubjectReference>> parents = ImmutableMap.builder();
         for (Map.Entry<ImmutableContextSet, ? extends Collection<? extends InheritanceNode>> entry : this.holder.getData(this.type).immutableInheritance().asMap().entrySet()) {
             ImmutableList.Builder<LPSubjectReference> builder = ImmutableList.builder();
             for (InheritanceNode n : entry.getValue()) {
                 builder.add(this.service.getGroupSubjects().loadSubject(n.getGroupName()).join().toReference());
             }
-            ret.put(entry.getKey(), builder.build());
+            parents.put(entry.getKey(), builder.build());
         }
-        return ret.build();
+        return parents.build();
     }
 
     @Override
@@ -245,11 +240,11 @@ public class PermissionHolderSubjectData implements LPSubjectData {
 
     @Override
     public ImmutableMap<ImmutableContextSet, ImmutableMap<String, String>> getAllOptions() {
-        ImmutableMap.Builder<ImmutableContextSet, ImmutableMap<String, String>> ret = ImmutableMap.builder();
+        ImmutableMap.Builder<ImmutableContextSet, ImmutableMap<String, String>> options = ImmutableMap.builder();
         for (Map.Entry<ImmutableContextSet, ? extends Collection<? extends Node>> entry : this.holder.getData(this.type).immutable().asMap().entrySet()) {
-            ret.put(entry.getKey(), nodesToOptions(entry.getValue()));
+            options.put(entry.getKey(), nodesToOptions(entry.getValue()));
         }
-        return ret.build();
+        return options.build();
     }
 
     @Override

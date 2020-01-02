@@ -23,48 +23,32 @@
  *  SOFTWARE.
  */
 
-package me.lucko.luckperms.common.cacheddata;
+package net.luckperms.api.node;
 
-import me.lucko.luckperms.common.model.HolderType;
-
-import net.luckperms.api.cacheddata.CachedData;
-import net.luckperms.api.query.QueryOptions;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 /**
- * Metadata about a given {@link CachedData}.
+ * Dummy implementation of {@link NodeEqualityPredicate}, used for the given constant
+ * implementations.
+ *
+ * <p>The implementation rule of not calling {@link Node#equals(Node, NodeEqualityPredicate)} is
+ * intentionally disregarded by this dummy implementation. The equals method has a special case for
+ * the dummy instances, preventing a stack overflow.</p>
  */
-public class CacheMetadata {
+final class DummyNodeEqualityPredicate implements NodeEqualityPredicate {
+    private final String name;
 
-    /**
-     * The type of the object which owns the cache
-     */
-    private final HolderType holderType;
-
-    /**
-     * The name of the object which owns the cache
-     */
-    private final String objectName;
-
-    /**
-     * The query options
-     */
-    private final QueryOptions queryOptions;
-
-    public CacheMetadata(HolderType holderType, String objectName, QueryOptions queryOptions) {
-        this.holderType = holderType;
-        this.objectName = objectName;
-        this.queryOptions = queryOptions;
+    DummyNodeEqualityPredicate(String name) {
+        this.name = name;
     }
 
-    public HolderType getHolderType() {
-        return this.holderType;
+    @Override
+    public boolean areEqual(@NonNull Node o1, @NonNull Node o2) {
+        return o1.equals(o2, this);
     }
 
-    public String getObjectName() {
-        return this.objectName;
-    }
-
-    public QueryOptions getQueryOptions() {
-        return this.queryOptions;
+    @Override
+    public String toString() {
+        return "NodeEqualityPredicate#" + this.name;
     }
 }

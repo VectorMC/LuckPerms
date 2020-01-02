@@ -95,7 +95,7 @@ public class UserInfo extends SubCommand<User> {
             Message.INFO_TEMP_PARENT_HEADER.send(sender);
             for (InheritanceNode node : tempParents) {
                 Message.INFO_PARENT_ENTRY.send(sender, node.getGroupName(), MessageUtils.getAppendableNodeContextString(plugin.getLocaleManager(), node));
-                Message.INFO_PARENT_ENTRY_EXPIRY.send(sender, DurationFormatter.LONG.formatDateDiff(node.getExpiry().getEpochSecond()));
+                Message.INFO_PARENT_ENTRY_EXPIRY.send(sender, DurationFormatter.LONG.format(node.getExpiryDuration()));
             }
         }
 
@@ -122,7 +122,7 @@ public class UserInfo extends SubCommand<User> {
                 suffix = "&f\"" + sussexValue + "&f\"";
             }
 
-            Map<String, List<String>> metaMap = data.getMeta();
+            Map<String, List<String>> metaMap = data.getMeta(MetaCheckEvent.Origin.INTERNAL);
             if (!metaMap.isEmpty()) {
                 meta = metaMap.entrySet().stream()
                         .flatMap(entry -> entry.getValue().stream().map(value -> Maps.immutableEntry(entry.getKey(), value)))

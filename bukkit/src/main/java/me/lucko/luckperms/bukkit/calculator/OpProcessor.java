@@ -23,48 +23,22 @@
  *  SOFTWARE.
  */
 
-package me.lucko.luckperms.common.cacheddata;
+package me.lucko.luckperms.bukkit.calculator;
 
-import me.lucko.luckperms.common.model.HolderType;
+import me.lucko.luckperms.common.calculator.processor.PermissionProcessor;
+import me.lucko.luckperms.common.calculator.result.TristateResult;
 
-import net.luckperms.api.cacheddata.CachedData;
-import net.luckperms.api.query.QueryOptions;
+import net.luckperms.api.util.Tristate;
 
 /**
- * Metadata about a given {@link CachedData}.
+ * Permission Processor which is added for opped users, to simply return true if
+ * no other processors match.
  */
-public class CacheMetadata {
+public class OpProcessor implements PermissionProcessor {
+    private static final TristateResult TRUE_RESULT = new TristateResult.Factory(OpProcessor.class).result(Tristate.TRUE);
 
-    /**
-     * The type of the object which owns the cache
-     */
-    private final HolderType holderType;
-
-    /**
-     * The name of the object which owns the cache
-     */
-    private final String objectName;
-
-    /**
-     * The query options
-     */
-    private final QueryOptions queryOptions;
-
-    public CacheMetadata(HolderType holderType, String objectName, QueryOptions queryOptions) {
-        this.holderType = holderType;
-        this.objectName = objectName;
-        this.queryOptions = queryOptions;
-    }
-
-    public HolderType getHolderType() {
-        return this.holderType;
-    }
-
-    public String getObjectName() {
-        return this.objectName;
-    }
-
-    public QueryOptions getQueryOptions() {
-        return this.queryOptions;
+    @Override
+    public TristateResult hasPermission(String permission) {
+        return TRUE_RESULT;
     }
 }

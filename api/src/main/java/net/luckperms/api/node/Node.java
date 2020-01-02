@@ -40,6 +40,7 @@ import net.luckperms.api.node.types.WeightNode;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
@@ -63,14 +64,23 @@ import java.util.stream.Stream;
  * node, as well as methods to query and extract additional state and properties
  * from these settings.</p>
  *
- * <p>Nodes have the following attributes:</p>
+ * <p>Nodes have the following 4 key attributes:</p>
  * <p></p>
  * <ul>
  * <li>{@link #getKey() key} - the key of the node</li>
  * <li>{@link #getValue() value} - the value of the node (false for negated)</li>
- * <li>{@link #getContexts() context} - the contexts required for this node to apply </li>
+ * <li>{@link #getContexts() context} - the contexts required for this node to apply</li>
  * <li>{@link #getExpiry() expiry} - the time when this node should expire</li>
  * </ul>
+ *
+ * <p>These are the key attributes which are considered when evaluating node
+ * {@link #equals(Object) equality}.</p>
+ *
+ * <p>Nodes can also optionally have {@link #metadata(NodeMetadataKey) metadata} attached to them,
+ * added during construction using {@link NodeBuilder#withMetadata(NodeMetadataKey, Object)}, and
+ * queried using {@link #metadata(NodeMetadataKey)} and {@link #getMetadata(NodeMetadataKey)}.
+ * Such metadata is never considered when evaluating {@link #equals(Object)} or
+ * {@link #equals(Node, NodeEqualityPredicate)} (any form of equality check).</p>
  *
  * <p>There are a number of node types, all of which extend from this class:</p>
  * <p></p>
@@ -95,7 +105,7 @@ public interface Node {
      * @param key the key
      * @return the node builder
      */
-    static @NonNull NodeBuilder builder(@NonNull String key) {
+    static @NonNull NodeBuilder<?, ?> builder(@NonNull String key) {
         return LuckPermsProvider.get().getNodeBuilderRegistry().forKey(key);
     }
 
@@ -153,8 +163,8 @@ public interface Node {
     /**
      * Gets the time when this node will expire.
      *
-     * @return the {@link Instant} when this node will expire, or null if it
-     * doesn't have an expiry time
+     * @return the {@link Instant} when this node will expire, or
+     * {@code null} if it doesn't have an expiry time
      */
     @Nullable Instant getExpiry();
 
@@ -166,6 +176,17 @@ public interface Node {
      * @return true if this node has expired
      */
     boolean hasExpired();
+
+    /**
+     * Gets the time until this node will expire.
+     *
+     * <p>Returns {@code null} if the node doesn't have an expiry time,
+     * and a {@link Duration#isNegative() negative} duration if it has already expired.</p>
+     *
+     * @return the duration until the nodes expiry
+     * @since 5.1
+     */
+    @Nullable Duration getExpiryDuration();
 
     /**
      * Gets the contexts required for this node to apply.

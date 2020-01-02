@@ -136,8 +136,8 @@ public enum Dependency {
     COMMODORE(
             "me{}lucko",
             "commodore",
-            "1.3",
-            "3+fpQ9eQpO73jm4z7G+6x+q87b8NwjY1KN+nmNGjplk=",
+            "1.4",
+            "9jrCBDKswqiT9/i97FtRmVJwYE3pXncxjoKFvdZMgzM=",
             Relocation.of("commodore", "me{}lucko{}commodore")
     ),
     MARIADB_DRIVER(
@@ -164,8 +164,10 @@ public enum Dependency {
     H2_DRIVER(
             "com.h2database",
             "h2",
-            "1.4.200",
-            "OtmsS2qunNnTrBxEdGXh7QYBm4UbiT3WqNdt222FvKY="
+            // seems to be a compat bug in 1.4.200 with older dbs
+            // see: https://github.com/h2database/h2database/issues/2078
+            "1.4.199",
+            "MSWhZ0O8a0z7thq7p4MgPx+2gjCqD9yXiY95b5ml1C4="
             // we don't apply relocations to h2 - it gets loaded via
             // an isolated classloader
     ),

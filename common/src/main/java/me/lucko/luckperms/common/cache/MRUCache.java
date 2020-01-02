@@ -23,31 +23,36 @@
  *  SOFTWARE.
  */
 
-package me.lucko.luckperms.common.util;
+package me.lucko.luckperms.common.cache;
 
-import me.lucko.luckperms.common.plugin.scheduler.SchedulerAdapter;
-import me.lucko.luckperms.common.plugin.scheduler.SchedulerTask;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import java.util.concurrent.TimeUnit;
+/**
+ * Implementation of a most-recently-used cache with a mod counter, to prevent race conditions
+ * occurring when the cache is cleared whilst a calculation is taking place.
+ *
+ * @param <T> the cached type
+ */
+public abstract class MRUCache<T> {
+    private volatile T recent;
+    private final AtomicInteger modCount = new AtomicInteger();
 
-public abstract class RepeatingTask {
-    private final SchedulerTask task;
-
-    protected RepeatingTask(SchedulerAdapter scheduler, long time, TimeUnit unit) {
-        this.task = scheduler.asyncRepeating(this::run, time, unit);
+    protected int modCount() {
+        return this.modCount.get();
     }
 
-    private void run() {
-        try {
-            tick();
-        } catch (Exception e) {
-            e.printStackTrace();
+    protected T getRecent() {
+        return this.recent;
+    }
+
+    protected void offerRecent(int validAt, T offer) {
+        if (validAt == this.modCount.get()) {
+            this.recent = offer;
         }
     }
 
-    protected abstract void tick();
-
-    public void stop() {
-        this.task.cancel();
+    protected void clearRecent() {
+        this.recent = null;
+        this.modCount.incrementAndGet();
     }
 }
